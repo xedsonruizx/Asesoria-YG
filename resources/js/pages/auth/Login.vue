@@ -30,7 +30,7 @@ defineProps<{
             v-bind="AuthenticatedSessionController.store.form()"
             :reset-on-success="['password']"
             v-slot="{ errors, processing }"
-            class="flex flex-col gap-6"
+            class="flex flex-col gap-6 md:p-0"
         >
             <div class="grid gap-6">
                 <div class="grid gap-2">

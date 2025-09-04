@@ -1,9 +1,26 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { Link } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
+import { Link, usePage } from '@inertiajs/vue3';
 import { dashboard, login, register, home } from '@/routes';
 
 const isMenuOpen = ref(false);
+const page = usePage();
+
+// Computed para obtener la ruta actual
+const currentRoute = computed(() => page.url);
+
+// Función para verificar si una ruta está activa
+const isActiveRoute = (route: string) => {
+    return currentRoute.value === route || currentRoute.value.startsWith(route);
+};
+
+// Función para agregar clases de estado activo manteniendo el estilo original
+const addActiveClasses = (baseClasses: string, route: string) => {
+    if (isActiveRoute(route)) {
+        return `${baseClasses} bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-700 dark:text-blue-300`;
+    }
+    return baseClasses;
+};
 
 const toggleMenu = () => {
     isMenuOpen.value = !isMenuOpen.value;
@@ -12,11 +29,10 @@ const toggleMenu = () => {
 const closeMenu = () => {
     isMenuOpen.value = false;
 };
-
 </script>
 
 <template>
-    <nav class="">
+    <nav class="sticky top-0 p-6 ">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
                 <!-- Logo -->
@@ -30,28 +46,41 @@ const closeMenu = () => {
               
                 <!-- Desktop Menu -->
                 <div class="hidden lg:flex items-center space-x-8">
-                    <Link :href="home()"
-                        class="rounded-sm border border-transparent px-5 
-                        py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A]"
+                    <Link 
+                        :href="home()"
+                        :class="addActiveClasses('rounded-sm border border-transparent px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A]', '/')"
                     >
                         Inicio
                     </Link>
-                    <Link v-if="$page.props.auth.user" :href="dashboard()"
-                        class="rounded-sm border border-transparent px-5 
-                        py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A]"
+                    
+                    <Link 
+                        v-if="$page.props.auth.user" 
+                        :href="dashboard()"
+                        :class="addActiveClasses('rounded-sm border border-transparent px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A]', '/dashboard')"
                     >
                         Dashboard
                     </Link>
                  
-                    <Link href="/publicaciones" class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium dark:text-gray-300 dark:hover:text-white">
+                    <Link 
+                        href="/publicaciones" 
+                        :class="addActiveClasses('text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium dark:text-gray-300 dark:hover:text-white', '/publicaciones')"
+                    >
                         Publicaciones
                     </Link>
-                    <Link v-if="$page.props.auth.user == null" :href="login()" 
-                        class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium dark:text-gray-300 dark:hover:text-white">
+                    
+                    <Link 
+                        v-if="$page.props.auth.user == null" 
+                        :href="login()" 
+                        :class="addActiveClasses('text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium dark:text-gray-300 dark:hover:text-white', '/login')"
+                    >
                         Iniciar sesion
                     </Link>
-                    <Link v-if="$page.props.auth.user == null" :href="register()" 
-                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                    
+                    <Link 
+                        v-if="$page.props.auth.user == null" 
+                        :href="register()" 
+                        :class="isActiveRoute('/register') ? 'bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-md text-sm font-medium shadow-md' : 'bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium'"
+                    >
                         Registrarse
                     </Link>
                 </div>
@@ -97,37 +126,41 @@ const closeMenu = () => {
         <div :class="{ 'block': isMenuOpen, 'hidden': !isMenuOpen }" class="lg:hidden">
             <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
                 <Link
-                    href="/"
+                    :href="home()"
                     @click="closeMenu"
-                    class="text-gray-700 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700"
+                    :class="addActiveClasses('text-gray-700 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium dark:text-gray-300 dark:hover:text-white ', '/')"
                 >
                     Inicio
                 </Link>
+                
                 <Link
                     href="/precios"
                     @click="closeMenu"
-                    class="text-gray-700 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700"
+                    :class="addActiveClasses('text-gray-700 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700', '/precios')"
                 >
                     Precios
                 </Link>
+                
                 <Link
                     href="/publicaciones"
                     @click="closeMenu"
-                    class="text-gray-700 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700"
+                    :class="addActiveClasses('text-gray-700 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700', '/publicaciones')"
                 >
                     Publicaciones
                 </Link>
+                
                 <Link
                     :href="login()"
                     @click="closeMenu"
-                    class="text-gray-700 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700"
+                    :class="addActiveClasses('text-gray-700 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700', '/login')"
                 >
                     Login
                 </Link>
+                
                 <Link
                     :href="register()"
                     @click="closeMenu"
-                    class="bg-blue-600 hover:bg-blue-700 text-white block px-3 py-2 rounded-md text-base font-medium w-full text-center"
+                    :class="isActiveRoute('/register') ? 'bg-blue-700 hover:bg-blue-800 text-white block px-3 py-2 rounded-md text-base font-medium w-full text-center shadow-md' : 'bg-blue-600 hover:bg-blue-700 text-white block px-3 py-2 rounded-md text-base font-medium w-full text-center'"
                 >
                     Registrarse
                 </Link>
