@@ -3,9 +3,15 @@ Pagina web con manejo de usuarios y roles, con formularios tipo quiz y crud para
 
 Proyecto realizado en Laravel Vue js
 
-Base de datos Maria DB
-node js 22.12.0
+#Requerimientos
+- php 8.1
+- Maria DB
+- composer
+- node js 22.12.0
+- npm 
 
+
+En el archivo .env modificar los datos de conexion a la base de datos
 
 #Inicializar proyecto
 
@@ -23,3 +29,12 @@ Comando que creara tablas para el inicio de sesion
 > npm run dev el frontend
 
 
+
+
+
+
+
+
+Comandos para la modificaciones del proyecto
+
+creacion de nueva tabla > php artisan make:migration create_+nombres_plural +_table  > create_usuarios_table
