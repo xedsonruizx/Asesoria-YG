@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { register, publicaciones } from '@/routes';
+import { publicaciones, evaluacion } from '@/routes';
 import { Link } from '@inertiajs/vue3';
+const companyName = import.meta.env.VITE_COMPANY_NAME || 'Asesorías YG';
 
 </script>
 <template>
@@ -18,7 +19,7 @@ import { Link } from '@inertiajs/vue3';
                     </p>
                     <div class="flex flex-col sm:flex-row gap-4 justify-center">
                         <Link 
-                            :href="register()" 
+                            :href="evaluacion()" 
                             class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg font-semibold text-lg transition-colors duration-200"
                         >
                             Evaluacion previa
@@ -39,7 +40,7 @@ import { Link } from '@inertiajs/vue3';
         <section class="py-20">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="text-center mb-16">
-                    <h2 class="text-3xl md:text-4xl font-bold mb-4">¿Por qué elegir Asesorías YG?</h2>
+                    <h2 class="text-3xl md:text-4xl font-bold mb-4">¿Por qué elegir {{ companyName }}</h2>
                     <p class="text-lg text-[#666666] dark:text-[#A6A6A6] max-w-2xl mx-auto">
                         Nuestra experiencia y compromiso nos distinguen en el mercado legal
                     </p>

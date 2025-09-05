@@ -5,8 +5,9 @@ use Inertia\Inertia;
 
 // SECCION DE INVITADOS O CLIENTES
 Route::redirect('/', '/inicio');
-Route::get('/inicio', function () {return Inertia::render('LayoutMaster');})->name('inicio');
-Route::get('publicaciones', function () {return Inertia::render('ClientMenu/Post');})->name('publicaciones');
+Route::get('/inicio', function () {return Inertia::render('LayoutMaster');})-> name('inicio');
+Route::get('publicaciones', function () {return Inertia::render('ClientMenu/Post');})-> name('publicaciones');
+Route::get('evaluacion', function () {return Inertia::render('ClientMenu/Evaluation');})-> name('evaluacion');
 
 
 

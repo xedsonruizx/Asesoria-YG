@@ -22,6 +22,11 @@ Comando que creara tablas para el inicio de sesion
 
 
 
+REFRESCAR RUTAS DEPUES DE NUEVA RUTAS
+php artisan route:clear
+php artisan config:clear
+php artisan view:clear
+
 
 2 consolas para front y back
 

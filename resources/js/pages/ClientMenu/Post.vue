@@ -2,6 +2,9 @@
 import { Head } from '@inertiajs/vue3';
 import TopBar from '@/components/MyComponents/TopBar.vue';
 
+// Obtener el nombre de la empresa desde las variables de entorno
+const companyName = import.meta.env.VITE_COMPANY_NAME || 'Asesorías YG';
+
 // Datos de ejemplo para las publicaciones
 const posts = [
     {
@@ -9,7 +12,7 @@ const posts = [
         title: 'Introducción a Laravel y Vue.js',
         excerpt: 'Aprende los fundamentos de Laravel y Vue.js para crear aplicaciones web modernas.',
         content: 'Laravel es un framework de PHP que facilita el desarrollo web, mientras que Vue.js es un framework de JavaScript para crear interfaces de usuario interactivas.',
-        author: 'Asesorías YG',
+        author: companyName,
         date: '2024-01-15',
         image: 'https://via.placeholder.com/400x200'
     },
@@ -18,7 +21,7 @@ const posts = [
         title: 'Mejores prácticas en desarrollo web',
         excerpt: 'Descubre las mejores prácticas para crear aplicaciones web escalables y mantenibles.',
         content: 'El desarrollo web moderno requiere seguir ciertas prácticas que garanticen la calidad y mantenibilidad del código.',
-        author: 'Asesorías YG',
+        author: companyName,
         date: '2024-01-10',
         image: 'https://via.placeholder.com/400x200'
     },
@@ -27,7 +30,7 @@ const posts = [
         title: 'Optimización de rendimiento en aplicaciones web',
         excerpt: 'Técnicas avanzadas para mejorar el rendimiento de tus aplicaciones web.',
         content: 'La optimización del rendimiento es crucial para proporcionar una buena experiencia de usuario.',
-        author: 'Asesorías YG',
+        author: companyName,
         date: '2024-01-05',
         image: 'https://via.placeholder.com/400x200'
     }

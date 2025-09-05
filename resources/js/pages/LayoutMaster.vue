@@ -7,6 +7,7 @@ import Landing from '@/pages/ClientMenu/Lading.vue';
 import Services from '@/components/MyComponents/Landing/Services.vue';
 import Rate from '@/components/MyComponents/Landing/Rate.vue';
 import Contact from '@/components/MyComponents/Landing/Contact.vue';
+const companyName = import.meta.env.VITE_COMPANY_NAME || 'Asesorías YG';
 
 </script>
 
@@ -34,7 +35,7 @@ import Contact from '@/components/MyComponents/Landing/Contact.vue';
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
                     <div class="col-span-1 md:col-span-2">
-                        <h3 class="text-2xl font-bold mb-4">Asesorías YG</h3>
+                        <h3 class="text-2xl font-bold mb-4">{{ companyName }}</h3>
                         <p class="text-gray-300 mb-4 max-w-md">
                             Brindamos servicios jurídicos especializados con más de 10 años de experiencia. 
                             Tu tranquilidad legal es nuestra prioridad.
@@ -80,7 +81,7 @@ import Contact from '@/components/MyComponents/Landing/Contact.vue';
                 </div>
                 
                 <div class="border-t border-gray-700 mt-8 pt-8 text-center text-gray-300">
-                    <p>&copy; 2024 Asesorías YG. Todos los derechos reservados.</p>
+                    <p>&copy; 2024 {{companyName}}. Todos los derechos reservados.</p>
                 </div>
             </div>
         </footer>
