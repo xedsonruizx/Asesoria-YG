@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { dashboard, login, register, home } from '@/routes';
+import { dashboard, login, register, inicio } from '@/routes';
 import { Head, Link } from '@inertiajs/vue3';
 import TopBar from '@/components/Mycomponents/TopBar.vue';
 

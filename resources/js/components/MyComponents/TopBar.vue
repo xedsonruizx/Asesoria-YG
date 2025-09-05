@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { dashboard, login, register, home } from '@/routes';
+import { dashboard, login, register, inicio } from '@/routes';
 
 const isMenuOpen = ref(false);
+const isScrolled = ref(false);
 const page = usePage();
 
 // Computed para obtener la ruta actual
@@ -29,10 +30,31 @@ const toggleMenu = () => {
 const closeMenu = () => {
     isMenuOpen.value = false;
 };
+
+// Función para manejar el scroll
+const handleScroll = () => {
+    isScrolled.value = window.scrollY > 10;
+};
+
+// Agregar y remover el listener de scroll
+onMounted(() => {
+    window.addEventListener('scroll', handleScroll);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('scroll', handleScroll);
+});
 </script>
 
 <template>
-    <nav class="sticky top-0 p-6 ">
+    <nav 
+        :class="[
+            'sticky top-0 p-3 transition-all duration-300 z-50',
+            isScrolled 
+                ? 'bg-[#FDFDFC] backdrop-blur-md shadow-lg border-b border-gray-200 dark:bg-[#0a0a0a] dark:border-gray-700' 
+                : 'bg-transparent'
+        ]"
+    >
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
                 <!-- Logo -->
@@ -46,9 +68,9 @@ const closeMenu = () => {
               
                 <!-- Desktop Menu -->
                 <div class="hidden lg:flex items-center space-x-8">
-                    <Link 
-                        :href="home()"
-                        :class="addActiveClasses('rounded-sm border border-transparent px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A]', '/')"
+                     <Link 
+                        :href="inicio()" 
+                        :class="addActiveClasses('text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium dark:text-gray-300 dark:hover:text-white', '/inicio')"
                     >
                         Inicio
                     </Link>
@@ -76,12 +98,13 @@ const closeMenu = () => {
                         Iniciar sesion
                     </Link>
                     
-                    <Link 
+                    <Link
                         v-if="$page.props.auth.user == null" 
-                        :href="register()" 
-                        :class="isActiveRoute('/register') ? 'bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-md text-sm font-medium shadow-md' : 'bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium'"
+                        :href="register()"
+                        @click="closeMenu"
+                        :class="addActiveClasses('text-gray-700 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700', '/register')"
                     >
-                        Registrarse
+                            Registrate
                     </Link>
                 </div>
 
@@ -126,9 +149,9 @@ const closeMenu = () => {
         <div :class="{ 'block': isMenuOpen, 'hidden': !isMenuOpen }" class="lg:hidden">
             <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
                 <Link
-                    :href="home()"
+                    :href="inicio()"
                     @click="closeMenu"
-                    :class="addActiveClasses('text-gray-700 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium dark:text-gray-300 dark:hover:text-white ', '/')"
+                    :class="addActiveClasses('text-gray-700 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium dark:text-gray-300 dark:hover:text-white ', '/inicio')"
                 >
                     Inicio
                 </Link>
@@ -156,13 +179,12 @@ const closeMenu = () => {
                 >
                     Login
                 </Link>
-                
-                <Link
+                 <Link
                     :href="register()"
                     @click="closeMenu"
-                    :class="isActiveRoute('/register') ? 'bg-blue-700 hover:bg-blue-800 text-white block px-3 py-2 rounded-md text-base font-medium w-full text-center shadow-md' : 'bg-blue-600 hover:bg-blue-700 text-white block px-3 py-2 rounded-md text-base font-medium w-full text-center'"
+                    :class="addActiveClasses('text-gray-700 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700', '/register')"
                 >
-                    Registrarse
+                    Registrate
                 </Link>
             </div>
         </div>
