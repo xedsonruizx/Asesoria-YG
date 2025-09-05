@@ -1,11 +1,18 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { dashboard, login, register, inicio } from '@/routes';
+import { login, register, inicio } from '@/routes';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { getInitials } from '@/composables/useInitials';
+import UserMenuContent from '@/components/UserMenuContent.vue';
 
 const isMenuOpen = ref(false);
 const isScrolled = ref(false);
 const page = usePage();
+const auth = computed(() => page.props.auth);
 
 // Computed para obtener la ruta actual
 const currentRoute = computed(() => page.url);
@@ -67,25 +74,16 @@ onUnmounted(() => {
                 </div>
               
                 <!-- Desktop Menu -->
-                <div class="hidden lg:flex items-center space-x-8">
+                <div class="hidden lg:flex items-center space-x-8 text-base">
                      <Link 
                         :href="inicio()" 
                         :class="addActiveClasses('text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium dark:text-gray-300 dark:hover:text-white', '/inicio')"
                     >
                         Inicio
                     </Link>
-                    
-                    <Link 
-                        v-if="$page.props.auth.user" 
-                        :href="dashboard()"
-                        :class="addActiveClasses('rounded-sm border border-transparent px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A]', '/dashboard')"
-                    >
-                        Dashboard
-                    </Link>
-                 
                     <Link 
                         href="/publicaciones" 
-                        :class="addActiveClasses('text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium dark:text-gray-300 dark:hover:text-white', '/publicaciones')"
+                        :class="addActiveClasses('text-gray-700 hover:text-blue-900 hover:font-bolder   px-3 py-2 rounded-md text-sm font-medium dark:text-gray-300 dark:hover:text-white' , '/publicaciones')"
                     >
                         Publicaciones
                     </Link>
@@ -102,10 +100,29 @@ onUnmounted(() => {
                         v-if="$page.props.auth.user == null" 
                         :href="register()"
                         @click="closeMenu"
-                        :class="addActiveClasses('text-gray-700 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700', '/register')"
+                        :class="addActiveClasses('text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium dark:text-gray-300 dark:hover:text-white', '/register')"
                     >
                             Registrate
                     </Link>
+                    <DropdownMenu v-if="auth.user">
+                        <DropdownMenuTrigger :as-child="true">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                class="relative size-10 w-auto rounded-full p-1 focus-within:ring-2 focus-within:ring-primary"
+                            >
+                                <Avatar class="size-8 overflow-hidden rounded-full">
+                                    <AvatarImage v-if="auth.user.avatar" :src="auth.user.avatar" :alt="auth.user.name" />
+                                    <AvatarFallback class="rounded-lg bg-neutral-200 font-semibold text-black dark:bg-neutral-700 dark:text-white">
+                                        {{ getInitials(auth.user?.name) }}
+                                    </AvatarFallback>
+                                </Avatar> 
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" class="w-56">
+                            <UserMenuContent :user="auth.user" />
+                        </DropdownMenuContent>
+                    </DropdownMenu> 
                 </div>
 
                 <!-- Mobile menu button -->
@@ -145,48 +162,6 @@ onUnmounted(() => {
             </div>
         </div>
 
-        <!-- Mobile menu -->
-        <div :class="{ 'block': isMenuOpen, 'hidden': !isMenuOpen }" class="lg:hidden">
-            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-                <Link
-                    :href="inicio()"
-                    @click="closeMenu"
-                    :class="addActiveClasses('text-gray-700 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium dark:text-gray-300 dark:hover:text-white ', '/inicio')"
-                >
-                    Inicio
-                </Link>
-                
-                <Link
-                    href="/precios"
-                    @click="closeMenu"
-                    :class="addActiveClasses('text-gray-700 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700', '/precios')"
-                >
-                    Precios
-                </Link>
-                
-                <Link
-                    href="/publicaciones"
-                    @click="closeMenu"
-                    :class="addActiveClasses('text-gray-700 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700', '/publicaciones')"
-                >
-                    Publicaciones
-                </Link>
-                
-                <Link
-                    :href="login()"
-                    @click="closeMenu"
-                    :class="addActiveClasses('text-gray-700 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700', '/login')"
-                >
-                    Login
-                </Link>
-                 <Link
-                    :href="register()"
-                    @click="closeMenu"
-                    :class="addActiveClasses('text-gray-700 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700', '/register')"
-                >
-                    Registrate
-                </Link>
-            </div>
-        </div>
+
     </nav>
 </template>
