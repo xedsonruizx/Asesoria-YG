@@ -3,6 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Http\Controllers\PostController;
+use App\Http\Controllers\TagCategoryController;
+use App\Http\Controllers\CategoryController;
 
 // SECCION DE INVITADOS O CLIENTES
 Route::redirect('/', '/inicio');
@@ -23,6 +25,13 @@ Route::get('publicaciones', [PostController::class, 'AdminIndex'])-> name('publi
 Route::patch('posts/{post}/status', [PostController::class, 'changeStatus'])->name('posts.change-status');
 
 
+// Rutas de administración
+Route::middleware(['auth'])->prefix('admin')->group(function () {
+    Route::resource('tags', TagCategoryController::class);
+    // Route::resource('categories', CategoryController::class);
+    // API para obtener tags (para selects en formularios)
+    Route::get('api/tags', [TagCategoryController::class, 'apiIndex'])->name('api.tags.index');
+});
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';
 

@@ -3,19 +3,26 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { show as postShow, index as postsIndex } from '@/routes/posts';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
-import { computed } from 'vue';
-import { ArrowLeft, Calendar, Tag, User, FileText, Image, Video, Download, Lock } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
+import { ArrowLeft, Calendar, Tag, User, FileText, Image, Video, Download, Lock, Trash2 } from 'lucide-vue-next';
+import Delete from '@/pages/administration/Posts/Delete.vue';
+import { router } from '@inertiajs/vue3';
 
 // Definir la interfaz Post
 interface Post {
   id: number;
   title: string;
   content: string;
-  Category: string;
+  tags?: Array<{
+    id: number;
+    name: string;
+    color: string;
+    slug: string;
+  }>;
   status: 'draft' | 'published' | 'Delete';
   image_path?: string;
   file_path?: string;
-  Subscripcion: boolean;
+  is_premium: boolean;
   created_at: string;
   updated_at: string;
   image_url?: string;
@@ -27,7 +34,7 @@ interface Props {
 }
 
 const props = defineProps<Props>();
-
+console.log(props.post)
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Publicaciones',
@@ -68,7 +75,7 @@ const formatDate = (dateString: string) => {
   });
 };
 
-// Detectar tipo de archivo multimedia
+// Detectar tipo de archivo multimedia (función consolidada)
 const getFileType = (filePath: string) => {
   if (!filePath) return null;
   const extension = filePath.split('.').pop()?.toLowerCase();
@@ -85,25 +92,54 @@ const getFileType = (filePath: string) => {
 
 const imageType = computed(() => props.post.image_path ? getFileType(props.post.image_path) : null);
 const fileType = computed(() => props.post.file_path ? getFileType(props.post.file_path) : null);
+
 // URL de imagen de respaldo (imagen base64 simple)
 const fallbackImageUrl = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMTgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIiBmaWxsPSIjOTk5Ij5JbWFnZW4gbm8gZGlzcG9uaWJsZTwvdGV4dD48L3N2Zz4=';
 
-// Agregar funciones para las acciones
+// Estado para el modal y errores de imagen
+const showDeleteModal = ref(false);
+const imageLoadError = ref(false);
+const fileImageLoadError = ref(false);
+
+// Funciones para manejar errores de imagen
+const handleImageError = () => {
+    imageLoadError.value = true;
+};
+
+const handleFileImageError = () => {
+    fileImageLoadError.value = true;
+};
+
+// Funciones para las acciones
 const editPost = () => {
-    // Navegar a la página de edición sin refresco
-    $inertia.visit(`/posts/${props.post.id}/edit`);
+    // Navegar a la página de edición
+    window.location.href = `/administration/posts/${props.post.id}/edit`;
 };
 
-const duplicatePost = () => {
-    // Lógica para duplicar post
-    console.log('Duplicar post:', props.post.id);
+const confirmDelete = () => {
+    showDeleteModal.value = true;
 };
 
-const deletePost = () => {
-    if (confirm('¿Estás seguro de que quieres eliminar esta publicación?')) {
-        $inertia.delete(`/posts/${props.post.id}`);
-    }
+const handleDeleteConfirm = (postId: number) => {
+    router.delete(`/posts/${postId}`, {
+        onSuccess: () => {
+            // El controlador ya redirige a posts.index con mensaje de éxito
+            console.log('Post eliminado exitosamente');
+        },
+        onError: (errors) => {
+            console.error('Error al eliminar el post:', errors);
+            alert('Error al eliminar el post. Inténtalo de nuevo.');
+        }
+    });
 };
+// Agregar computed properties para generar las URLs correctas
+const imageUrl = computed(() => {
+  return props.post.image_path ? `/storage/${props.post.image_path}` : null;
+});
+
+const fileUrl = computed(() => {
+  return props.post.file_path ? `/storage/${props.post.file_path}` : null;
+});
 </script>
 
 <template>
@@ -135,17 +171,27 @@ const deletePost = () => {
                             </span>
                         </div>
                         
+                        
                         <!-- Metadatos -->
                         <div class="flex flex-wrap gap-4 text-sm text-muted-foreground">
                             <div class="flex items-center gap-2">
                                 <Calendar class="h-4 w-4" />
                                 <span>{{ formatDate(post.created_at) }}</span>
                             </div>
-                            <div class="flex items-center gap-2">
+                            <div v-if="post.tags && post.tags.length > 0" class="flex items-center gap-2">
                                 <Tag class="h-4 w-4" />
-                                <span>{{ post.Category }}</span>
+                                <div class="flex flex-wrap gap-1">
+                                    <span 
+                                        v-for="tag in post.tags" 
+                                        :key="tag.id"
+                                        class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white"
+                                        :style="{ backgroundColor: tag.color }"
+                                    >
+                                        {{ tag.name }}
+                                    </span>
+                                </div>
                             </div>
-                            <div v-if="post.Subscripcion" class="flex items-center gap-2 text-pink-600 dark:text-pink-400">
+                            <div v-if="post.is_premium" class="flex items-center gap-2 text-pink-600 dark:text-pink-400">
                                 <Lock class="h-4 w-4" />
                                 <span>Contenido Premium</span>
                             </div>
@@ -153,12 +199,12 @@ const deletePost = () => {
                     </div>
 
                     <!-- Imagen principal -->
-                    <div v-if="post.image_url && imageType === 'image'" class="bg-card rounded-lg overflow-hidden shadow-sm border border-border">
+                    <div v-if="imageUrl && imageType === 'image'" class="bg-card rounded-lg overflow-hidden shadow-sm border border-border">
                         <div class="relative">
                             <!-- Imagen real -->
                             <img 
                                 v-if="!imageLoadError"
-                                :src="post.image_url" 
+                                :src="imageUrl" 
                                 :alt="post.title"
                                 class="w-full h-auto max-h-96 object-cover"
                                 loading="lazy"
@@ -180,7 +226,7 @@ const deletePost = () => {
                     </div>
 
                     <!-- Placeholder cuando no hay imagen -->
-                    <div v-else-if="!post.image_url" class="bg-card rounded-lg overflow-hidden shadow-sm border border-border">
+                    <div v-else-if="!imageUrl" class="bg-card rounded-lg overflow-hidden shadow-sm border border-border">
                         <div class="w-full h-64 flex items-center justify-center bg-gray-50 dark:bg-gray-900 border-2 border-dashed border-gray-300 dark:border-gray-600">
                             <div class="text-center text-gray-400 dark:text-gray-500">
                                 <Image class="h-12 w-12 mx-auto mb-3 opacity-40" />
@@ -191,9 +237,9 @@ const deletePost = () => {
                     </div>
 
                     <!-- Video principal -->
-                    <div v-if="post.image_url && imageType === 'video'" class="bg-card rounded-lg overflow-hidden shadow-sm border border-border">
+                    <div v-if="imageUrl && imageType === 'video'" class="bg-card rounded-lg overflow-hidden shadow-sm border border-border">
                         <video 
-                            :src="post.image_url" 
+                            :src="imageUrl" 
                             controls
                             class="w-full h-auto max-h-96"
                             preload="metadata"
@@ -224,9 +270,22 @@ const deletePost = () => {
                                 <label class="text-sm font-medium text-muted-foreground">ID</label>
                                 <p class="text-foreground">#{{ post.id }}</p>
                             </div>
-                            <div>
-                                <label class="text-sm font-medium text-muted-foreground">Categoría</label>
-                                <p class="text-foreground">{{ post.Category }}</p>
+                            <div v-if="post.tags && post.tags.length > 0">
+                                <label class="text-sm font-medium text-muted-foreground">Tags</label>
+                                <div class="flex flex-wrap gap-2 mt-1">
+                                    <span 
+                                        v-for="tag in post.tags" 
+                                        :key="tag.id"
+                                        class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white"
+                                        :style="{ backgroundColor: tag.color }"
+                                    >
+                                        {{ tag.name }}
+                                    </span>
+                                </div>
+                            </div>
+                            <div v-else>
+                                <label class="text-sm font-medium text-muted-foreground">Tags</label>
+                                <p class="text-muted-foreground text-sm">Sin tags asignados</p>
                             </div>
                             <div>
                                 <label class="text-sm font-medium text-muted-foreground">Estado</label>
@@ -234,7 +293,7 @@ const deletePost = () => {
                             </div>
                             <div>
                                 <label class="text-sm font-medium text-muted-foreground">Tipo de acceso</label>
-                                <p class="text-foreground">{{ post.Subscripcion ? 'Premium' : 'Público' }}</p>
+                                <p class="text-foreground">{{ post.is_premium ? 'Premium' : 'Público' }}</p>
                             </div>
                             <div>
                                 <label class="text-sm font-medium text-muted-foreground">Creado</label>
@@ -248,14 +307,14 @@ const deletePost = () => {
                     </div>
 
                     <!-- Archivos adjuntos -->
-                    <div v-if="post.file_url || (post.image_url && imageType !== 'image' && imageType !== 'video')" class="bg-card rounded-lg p-6 shadow-sm border border-border">
+                    <div v-if="fileUrl || (imageUrl && imageType !== 'image' && imageType !== 'video')" class="bg-card rounded-lg p-6 shadow-sm border border-border">
                         <h3 class="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
                             <Download class="h-5 w-5" />
                             Archivos adjuntos
                         </h3>
                         <div class="space-y-3">
                             <!-- Archivo principal si no es imagen/video -->
-                            <div v-if="post.image_url && imageType !== 'image' && imageType !== 'video'" class="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                            <div v-if="imageUrl && imageType !== 'image' && imageType !== 'video'" class="flex items-center gap-3 p-3 bg-muted rounded-lg">
                                 <div class="flex-shrink-0">
                                     <Image v-if="imageType === 'image'" class="h-6 w-6 text-blue-500" />
                                     <Video v-else-if="imageType === 'video'" class="h-6 w-6 text-purple-500" />
@@ -266,7 +325,7 @@ const deletePost = () => {
                                     <p class="text-xs text-muted-foreground">{{ imageType || 'documento' }}</p>
                                 </div>
                                 <a 
-                                    :href="post.image_url" 
+                                    :href="imageUrl" 
                                     target="_blank"
                                     class="flex-shrink-0 inline-flex items-center px-3 py-1 text-xs font-medium bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
                                 >
@@ -275,7 +334,7 @@ const deletePost = () => {
                             </div>
 
                             <!-- Archivo adicional -->
-                            <div v-if="post.file_url" class="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                            <div v-if="fileUrl" class="flex items-center gap-3 p-3 bg-muted rounded-lg">
                                 <div class="flex-shrink-0">
                                     <Image v-if="fileType === 'image'" class="h-6 w-6 text-blue-500" />
                                     <Video v-else-if="fileType === 'video'" class="h-6 w-6 text-purple-500" />
@@ -286,7 +345,7 @@ const deletePost = () => {
                                     <p class="text-xs text-muted-foreground">{{ fileType || 'documento' }}</p>
                                 </div>
                                 <a 
-                                    :href="post.file_url" 
+                                    :href="fileUrl" 
                                     target="_blank"
                                     class="flex-shrink-0 inline-flex items-center px-3 py-1 text-xs font-medium bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
                                 >
@@ -295,11 +354,11 @@ const deletePost = () => {
                             </div>
 
                             <!-- Galería de archivos adicionales si hay video en file_url -->
-                            <div v-if="post.file_url && fileType === 'video'" class="mt-4">
+                            <div v-if="fileUrl && fileType === 'video'" class="mt-4">
                                 <h4 class="text-sm font-medium text-foreground mb-2">Video adjunto</h4>
                                 <div class="bg-muted rounded-lg overflow-hidden">
                                     <video 
-                                        :src="post.file_url" 
+                                        :src="fileUrl" 
                                         controls
                                         class="w-full h-auto max-h-48"
                                         preload="metadata"
@@ -310,14 +369,14 @@ const deletePost = () => {
                             </div>
 
                             <!-- Imagen adicional si hay imagen en file_url -->
-                            <div v-if="post.file_url && fileType === 'image'" class="mt-4">
+                            <div v-if="fileUrl && fileType === 'image'" class="mt-4">
                                 <h4 class="text-sm font-medium text-foreground mb-2">Imagen adjunta</h4>
                                 <div class="bg-muted rounded-lg overflow-hidden">
                                     <div class="relative">
                                         <!-- Imagen adjunta real -->
                                         <img 
                                             v-if="!fileImageLoadError"
-                                            :src="post.file_url" 
+                                            :src="fileUrl" 
                                             :alt="'Imagen adjunta de ' + post.title"
                                             class="w-full h-auto max-h-48 object-cover"
                                             loading="lazy"
@@ -352,15 +411,10 @@ const deletePost = () => {
                                 Editar publicación
                             </button>
                             <button 
-                                @click="duplicatePost"
-                                class="w-full inline-flex items-center justify-center px-4 py-2 text-sm font-medium bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 transition-colors"
+                                @click="confirmDelete"
+                                class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 transition-colors"
                             >
-                                Duplicar
-                            </button>
-                            <button 
-                                @click="deletePost"
-                                class="w-full inline-flex items-center justify-center px-4 py-2 text-sm font-medium bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 transition-colors"
-                            >
+                                <Trash2 class="h-4 w-4" />
                                 Eliminar
                             </button>
                         </div>
@@ -368,5 +422,13 @@ const deletePost = () => {
                 </div>
             </div>
         </div>
+
+        <!-- Componente Modal de eliminación -->
+        <Delete 
+            :post="post"
+            :open="showDeleteModal"
+            @confirm="handleDeleteConfirm"
+            @cancel="() => showDeleteModal = false"
+        />
     </AppLayout>
 </template>

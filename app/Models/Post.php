@@ -12,15 +12,22 @@ class Post extends Model
     protected $fillable = [
         'title',
         'content',
-        'Category',
+        'excerpt',
+        'slug',
+        'meta_description',
+        'tags',
+        'category_id',
         'status',
+        'is_premium',
         'image_path',
         'file_path',
-        'Subscripcion'
+        'author_id',
+        'published_at'
     ];
 
     protected $casts = [
-        'Subscripcion' => 'boolean',
+        'is_premium' => 'boolean',
+        'published_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -38,7 +45,9 @@ class Post extends Model
 
     public function scopeByCategory($query, $category)
     {
-        return $query->where('Category', $category);
+        return $query->whereHas('tags', function ($q) use ($category) {
+            $q->where('slug', $category);
+        });
     }
 
     // Accessor para obtener la URL de la imagen
@@ -51,5 +60,23 @@ class Post extends Model
     public function getFileUrlAttribute()
     {
         return $this->file_path ? asset('storage/' . $this->file_path) : null;
+    }
+
+    // Agregar esta relación al modelo Post existente
+    public function tags()
+    {
+        return $this->belongsToMany(TagCategory::class, 'post_tag_category', 'post_id', 'tag_category_id')
+                    ->withTimestamps();
+    }
+
+    // Scope para filtrar por tags
+    public function scopeWithTags($query, $tagIds)
+    {
+        if (!empty($tagIds)) {
+            return $query->whereHas('tags', function ($q) use ($tagIds) {
+                $q->whereIn('tags_category.id', $tagIds);
+            });
+        }
+        return $query;
     }
 }

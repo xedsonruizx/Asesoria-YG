@@ -1,16 +1,22 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { index as postsIndex, show as postShow } from '@/routes/posts';
+import { index as postsIndex, show as postShow, create as postCreate } from '@/routes/posts';
 import { type BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/vue3';
+import { Head, router } from '@inertiajs/vue3';
 import PlaceholderPattern from '@/components/PlaceholderPattern.vue';
+import { Plus, ChevronLeft, ChevronRight } from 'lucide-vue-next';
 
 // Definir la interfaz Post
 interface Post {
   id: number;
   title: string;
   content: string;
-  Category: string;
+  tags?: Array<{
+    id: number;
+    name: string;
+    color: string;
+    slug: string;
+  }>;
   status: 'draft' | 'published' | 'Delete';
   image_path?: string;
   file_path?: string;
@@ -79,6 +85,58 @@ const truncateContent = (content: string, maxLength: number = 100) => {
 const viewPost = (post: Post) => {
   window.location.href = postShow(post.id).url;
 };
+
+// Función para navegar a crear nueva publicación
+const createNewPost = () => {
+  window.location.href = postCreate().url;
+};
+
+// Funciones de paginación
+const goToPage = (page: number) => {
+  if (page >= 1 && page <= (props.posts?.last_page || 1)) {
+    router.get(postsIndex().url, { page }, {
+      preserveState: true,
+      preserveScroll: true
+    });
+  }
+};
+
+const goToPreviousPage = () => {
+  const currentPage = props.posts?.current_page || 1;
+  if (currentPage > 1) {
+    goToPage(currentPage - 1);
+  }
+};
+
+const goToNextPage = () => {
+  const currentPage = props.posts?.current_page || 1;
+  const lastPage = props.posts?.last_page || 1;
+  if (currentPage < lastPage) {
+    goToPage(currentPage + 1);
+  }
+};
+
+// Generar números de página para mostrar
+const getPageNumbers = () => {
+  const currentPage = props.posts?.current_page || 1;
+  const lastPage = props.posts?.last_page || 1;
+  const pages: number[] = [];
+  
+  // Mostrar máximo 5 páginas
+  let startPage = Math.max(1, currentPage - 2);
+  let endPage = Math.min(lastPage, startPage + 4);
+  
+  // Ajustar si estamos cerca del final
+  if (endPage - startPage < 4) {
+    startPage = Math.max(1, endPage - 4);
+  }
+  
+  for (let i = startPage; i <= endPage; i++) {
+    pages.push(i);
+  }
+  
+  return pages;
+};
 </script>
 
 <template>
@@ -88,8 +146,19 @@ const viewPost = (post: Post) => {
         <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
             <!-- Header con información de publicaciones -->
             <div class="bg-card rounded-lg p-6 shadow-sm border border-border">
-                <h1 class="text-2xl font-bold mb-2 text-foreground">Gestión de Publicaciones</h1>
-                <p class="text-muted-foreground mb-4">Administra y visualiza todas las publicaciones del sistema</p>
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <h1 class="text-2xl font-bold mb-2 text-foreground">Gestión de Publicaciones</h1>
+                        <p class="text-muted-foreground">Administra y visualiza todas las publicaciones del sistema</p>
+                    </div>
+                    <button 
+                        @click="createNewPost"
+                        class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md transition-colors font-medium"
+                    >
+                        <Plus class="h-4 w-4" />
+                        Crear Nueva Publicación
+                    </button>
+                </div>
                 
                 <!-- Estadísticas básicas -->
                 <div class="flex gap-4 flex-wrap">
@@ -101,7 +170,78 @@ const viewPost = (post: Post) => {
                     </div>
                 </div>
             </div>
-
+   <!-- Información de paginación con controles -->
+            <div v-if="props.posts?.data && props.posts.data.length > 0" class="bg-card rounded-lg p-4 shadow-sm border border-border">
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <!-- Información de registros -->
+                    <div class="text-muted-foreground text-sm">
+                        <span>Mostrando {{ props.posts.from }} a {{ props.posts.to }} de {{ props.posts.total }} publicaciones</span>
+                    </div>
+                    
+                    <!-- Controles de paginación -->
+                    <div v-if="props.posts.last_page > 1" class="flex items-center gap-2">
+                        <!-- Botón anterior -->
+                        <button 
+                            @click="goToPreviousPage"
+                            :disabled="props.posts.current_page <= 1"
+                            class="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <ChevronLeft class="h-4 w-4" />
+                            Anterior
+                        </button>
+                        
+                        <!-- Números de página -->
+                        <div class="flex items-center gap-1">
+                            <!-- Primera página si no está visible -->
+                            <template v-if="getPageNumbers()[0] > 1">
+                                <button 
+                                    @click="goToPage(1)"
+                                    class="inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                                >
+                                    1
+                                </button>
+                                <span v-if="getPageNumbers()[0] > 2" class="text-muted-foreground px-1">...</span>
+                            </template>
+                            
+                            <!-- Páginas visibles -->
+                            <button 
+                                v-for="page in getPageNumbers()" 
+                                :key="page"
+                                @click="goToPage(page)"
+                                :class="[
+                                    'inline-flex items-center justify-center w-8 h-8 text-sm font-medium rounded-md transition-colors',
+                                    page === props.posts?.current_page 
+                                        ? 'bg-primary text-primary-foreground' 
+                                        : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                                ]"
+                            >
+                                {{ page }}
+                            </button>
+                            
+                            <!-- Última página si no está visible -->
+                            <template v-if="getPageNumbers()[getPageNumbers().length - 1] < props.posts.last_page">
+                                <span v-if="getPageNumbers()[getPageNumbers().length - 1] < props.posts.last_page - 1" class="text-muted-foreground px-1">...</span>
+                                <button 
+                                    @click="goToPage(props.posts.last_page)"
+                                    class="inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                                >
+                                    {{ props.posts.last_page }}
+                                </button>
+                            </template>
+                        </div>
+                        
+                        <!-- Botón siguiente -->
+                        <button 
+                            @click="goToNextPage"
+                            :disabled="props.posts.current_page >= props.posts.last_page"
+                            class="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Siguiente
+                            <ChevronRight class="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+            </div>
             <!-- Tabla de publicaciones -->
             <div class="bg-card rounded-lg overflow-hidden shadow-sm border border-border">
                 <div v-if="props.posts?.data && props.posts.data.length > 0">
@@ -109,11 +249,10 @@ const viewPost = (post: Post) => {
                     <div class="bg-muted border-b border-border px-4 py-3">
                         <div class="grid grid-cols-1 md:grid-cols-6 gap-4 font-semibold text-foreground">
                             <div class="md:col-span-2">Título y Contenido</div>
-                            <div>Categoría</div>
+                            <div>Tags</div>
                             <div>Estado</div>
                             <div>Archivos</div>
                             <div class="hidden md:block">Fecha de Creación</div>
-                            <div class="hidden md:block">Acciones</div>
                         </div>
                     </div>
                     
@@ -133,10 +272,20 @@ const viewPost = (post: Post) => {
                                     </div>
                                 </div>
                                 
-                                <!-- Categoría -->
+                                <!-- Tags -->
                                 <div class="mt-2 md:mt-0">
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground">
-                                        {{ post.Category }}
+                                    <div v-if="post.tags && post.tags.length > 0" class="flex flex-wrap gap-1">
+                                        <span 
+                                            v-for="tag in post.tags" 
+                                            :key="tag.id"
+                                            :style="{ backgroundColor: tag.color }"
+                                            class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white"
+                                        >
+                                            {{ tag.name }}
+                                        </span>
+                                    </div>
+                                    <span v-else class="text-xs text-muted-foreground italic">
+                                        Sin tags
                                     </span>
                                 </div>
                                 
@@ -200,12 +349,7 @@ const viewPost = (post: Post) => {
                 </div>
             </div>
             
-            <!-- Información de paginación -->
-            <div v-if="props.posts?.data && props.posts.data.length > 0" class="bg-card rounded-lg p-4 shadow-sm border border-border">
-                <div class="flex justify-between items-center text-muted-foreground text-sm">
-                    <span>Mostrando {{ props.posts.from }} a {{ props.posts.to }} de {{ props.posts.total }} publicaciones</span>
-                </div>
-            </div>
+         
         </div>
     </AppLayout>
 </template>

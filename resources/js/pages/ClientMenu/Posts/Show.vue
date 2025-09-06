@@ -221,17 +221,6 @@ const sharePost = () => {
                     </div>
                 </div>
 
-                <!-- Placeholder cuando no hay imagen -->
-                <div v-else-if="!post.image_path" class="bg-white dark:bg-[#161615] rounded-lg overflow-hidden">
-                    <div class="w-full h-64 flex items-center justify-center bg-gray-50 dark:bg-gray-900 border-2 border-dashed border-gray-300 dark:border-gray-600">
-                        <div class="text-center text-gray-400 dark:text-gray-500">
-                            <Image class="h-12 w-12 mx-auto mb-3 opacity-40" />
-                            <p class="text-base font-medium mb-1">Sin imagen</p>
-                            <p class="text-sm opacity-75">Esta publicación no tiene imagen</p>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Video principal -->
                 <div v-if="post.image_path && imageType === 'video'" class="relative">
                     <!-- Overlay para contenido premium -->

@@ -28,6 +28,10 @@ php artisan config:clear
 php artisan view:clear
 
 
+LINKEAR CARPETA PARA GUARDAR ARCHIVOS
+php artisan storage:link
+
+
 2 consolas para front y back
 
 > php artisan serve el backend
