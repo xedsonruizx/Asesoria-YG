@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use App\Http\Controllers\PostController;
 
 // SECCION DE INVITADOS O CLIENTES
 Route::redirect('/', '/inicio');
@@ -15,6 +16,9 @@ Route::get('dashboard', function () {return Inertia::render('administration/Dash
 
 
 
+// Rutas para Posts
+Route::resource('posts', PostController::class);
+Route::patch('posts/{post}/status', [PostController::class, 'changeStatus'])->name('posts.change-status');
 
 
 require __DIR__.'/settings.php';
