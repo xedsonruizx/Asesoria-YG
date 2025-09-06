@@ -79,6 +79,21 @@ class PostController extends Controller
     }
 
     /**
+     * Display the specified resource for clients.
+     */
+    public function clientShow(Post $post)
+    {
+        // Solo mostrar posts publicados
+        if ($post->status !== 'published') {
+            abort(404);
+        }
+
+        return Inertia::render('ClientMenu/Posts/Show', [
+            'post' => $post
+        ]);
+    }
+
+    /**
      * Display the specified resource.
      */
     public function show(Post $post)
@@ -168,5 +183,33 @@ class PostController extends Controller
         $post->update($validated);
 
         return back()->with('success', 'Estado de la publicación actualizado.');
+    }
+
+    /**
+     * Display published posts for clients
+     */
+    public function AdminIndex()
+    {
+        $posts = Post::where('status', 'published')
+                    ->orderBy('created_at', 'desc')
+                    ->get()
+                    ->map(function ($post) {
+                        return [
+                            'id' => $post->id,
+                            'title' => $post->title,
+                            'content' => $post->content,
+                            'category' => $post->Category,
+                            'status' => $post->status,
+                            'image_path' => $post->image_path ? asset('storage/' . $post->image_path) : null,
+                            'file_path' => $post->file_path ? asset('storage/' . $post->file_path) : null,
+                            'subscripcion' => $post->Subscripcion,
+                            'created_at' => $post->created_at->format('Y-m-d'),
+                            'updated_at' => $post->updated_at->format('Y-m-d')
+                        ];
+                    });
+
+        return Inertia::render('ClientMenu/Post', [
+            'posts' => $posts
+        ]);
     }
 }

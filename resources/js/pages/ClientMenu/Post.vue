@@ -1,8 +1,30 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
+import { router } from '@inertiajs/vue3'; // ← Asegúrate de tener esta importación
 import TopBar from '@/components/MyComponents/TopBar.vue';
 import SubscriptionModal from '@/components/MyComponents/SubscriptionModal.vue';
 import { computed, ref } from 'vue';
+import { Image } from 'lucide-vue-next';
+
+// Props para recibir los posts del servidor
+interface Post {
+    id: number;
+    title: string;
+    content: string;
+    category: string;
+    status: string;
+    image_path: string | null;
+    file_path: string | null;
+    subscripcion: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+interface Props {
+    posts: Post[];
+}
+
+const props = defineProps<Props>();
 
 // Obtener el nombre de la empresa desde las variables de entorno
 const companyName = import.meta.env.VITE_COMPANY_NAME || 'Asesorías YG';
@@ -11,77 +33,28 @@ const companyName = import.meta.env.VITE_COMPANY_NAME || 'Asesorías YG';
 const showSubscriptionModal = ref(false);
 const selectedPostTitle = ref('');
 
+// Estado para manejar errores de imagen
+const imageErrors = ref<Record<number, boolean>>({});
+
 // Simulamos el estado de suscripción del usuario (esto vendría de props o store)
 const userHasActiveSubscription = false; // Cambiar según el estado real del usuario
 
-// Datos de ejemplo para las publicaciones según el esquema de BD
-const posts = [
-    {
-        id: 1,
-        title: 'Guía Completa de Compliance Legal para Empresas',
-        content: 'Una guía exhaustiva sobre cómo implementar un sistema de compliance efectivo en tu empresa. Incluye templates, checklists y casos de estudio reales de empresas que han logrado certificaciones internacionales.',
-        category: 'Legal',
-        status: 'published',
-        image_path: 'https://via.placeholder.com/400x200/3B82F6/FFFFFF?text=Legal+Compliance',
-        file_path: '/downloads/compliance-guide.pdf',
-        subscripcion: true, // Contenido de pago
-        created_at: '2024-01-15',
-        updated_at: '2024-01-15'
-    },
-    {
-        id: 2,
-        title: 'Estrategias de Reclutamiento Digital',
-        content: 'Descubre las mejores prácticas para atraer talento en la era digital. Incluye herramientas gratuitas, técnicas de sourcing y templates de entrevistas estructuradas.',
-        category: 'RRHH',
-        status: 'published',
-        image_path: 'https://via.placeholder.com/400x200/10B981/FFFFFF?text=RRHH+Digital',
-        file_path: null,
-        subscripcion: false, // Contenido gratuito
-        created_at: '2024-01-10',
-        updated_at: '2024-01-10'
-    },
-    {
-        id: 3,
-        title: 'Manual de Contratos Laborales 2024',
-        content: 'Manual actualizado con todos los tipos de contratos laborales, cláusulas especiales, y modelos descargables. Incluye las últimas reformas laborales y jurisprudencia relevante.',
-        category: 'Legal',
-        status: 'published',
-        image_path: 'https://via.placeholder.com/400x200/8B5CF6/FFFFFF?text=Contratos+2024',
-        file_path: '/downloads/manual-contratos-2024.pdf',
-        subscripcion: true, // Contenido de pago
-        created_at: '2024-01-05',
-        updated_at: '2024-01-08'
-    },
-    {
-        id: 4,
-        title: 'Evaluación de Desempeño: Metodologías Modernas',
-        content: 'Aprende a implementar sistemas de evaluación de desempeño efectivos. Incluye matrices de competencias, formularios y técnicas de feedback constructivo.',
-        category: 'RRHH',
-        status: 'published',
-        image_path: 'https://via.placeholder.com/400x200/F59E0B/FFFFFF?text=Evaluacion+360',
-        file_path: null,
-        subscripcion: false, // Contenido gratuito
-        created_at: '2024-01-03',
-        updated_at: '2024-01-03'
-    },
-    {
-        id: 5,
-        title: 'Protección de Datos y GDPR para PyMEs',
-        content: 'Guía práctica para implementar medidas de protección de datos personales. Incluye políticas de privacidad, procedimientos de seguridad y formularios de consentimiento.',
-        category: 'Legal',
-        status: 'published',
-        image_path: 'https://via.placeholder.com/400x200/EF4444/FFFFFF?text=GDPR+PyMEs',
-        file_path: '/downloads/gdpr-pymes-guide.pdf',
-        subscripcion: true, // Contenido de pago
-        created_at: '2024-01-01',
-        updated_at: '2024-01-01'
-    }
-];
-
-// Computed para filtrar posts publicados
+// Computed para filtrar posts publicados (ya vienen filtrados del servidor)
 const publishedPosts = computed(() => {
-    return posts.filter(post => post.status === 'published');
+    return props.posts;
 });
+
+
+// Función para cerrar el modal
+const closeSubscriptionModal = () => {
+    showSubscriptionModal.value = false;
+    selectedPostTitle.value = '';
+};
+
+// Función para manejar errores de imagen
+const handleImageError = (postId: number) => {
+    imageErrors.value[postId] = true;
+};
 
 // Función para obtener el color de la categoría
 const getCategoryColor = (category: string) => {
@@ -104,30 +77,23 @@ const formatDate = (dateString: string) => {
 };
 
 // Función para manejar clic en post
-const handlePostClick = (post: any) => {
+const handlePostClick = (post: Post) => {
     console.log('🔍 Post clicked:', post.title);
     console.log('🔒 Subscription required:', post.subscripcion);
     console.log('👤 User has subscription:', userHasActiveSubscription);
-    console.log('📊 Modal state before:', showSubscriptionModal.value);
     
     if (post.subscripcion && !userHasActiveSubscription) {
         // Mostrar modal de suscripción
         console.log('✅ Opening subscription modal...');
         selectedPostTitle.value = post.title;
         showSubscriptionModal.value = true;
-        console.log('📊 Modal state after:', showSubscriptionModal.value);
-        console.log('📝 Selected post title:', selectedPostTitle.value);
         return;
     }
-    // Lógica para abrir el post completo
-    console.log('Abriendo post:', post.title);
+    
+    // Navegar al show del post
+    router.visit(`/publicacion/${post.id}`);
 };
 
-// Función para cerrar el modal
-const closeSubscriptionModal = () => {
-    showSubscriptionModal.value = false;
-    selectedPostTitle.value = '';
-};
 </script>
 
 <template>
@@ -179,11 +145,33 @@ const closeSubscriptionModal = () => {
                     
                     <!-- Imagen del post -->
                     <div class="aspect-video bg-gray-200 dark:bg-gray-700 relative overflow-hidden">
+                        <!-- Imagen disponible y sin errores -->
                         <img 
+                            v-if="post.image_path && !imageErrors[post.id]"
                             :src="post.image_path" 
                             :alt="post.title"
                             class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            @error="handleImageError(post.id)"
                         />
+                        
+                        <!-- Placeholder cuando hay error de carga -->
+                        <div v-else-if="post.image_path && imageErrors[post.id]" class="w-full h-full flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+                            <div class="text-center text-gray-400 dark:text-gray-500">
+                                <Image class="h-8 w-8 mx-auto mb-2 opacity-40" />
+                                <p class="text-sm font-medium mb-1">Imagen no disponible</p>
+                                <p class="text-xs opacity-75">Error al cargar la imagen</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Placeholder cuando no hay imagen -->
+                        <div v-else class="w-full h-full flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+                            <div class="text-center text-gray-400 dark:text-gray-500">
+                                <Image class="h-8 w-8 mx-auto mb-2 opacity-40" />
+                                <p class="text-sm font-medium mb-1">Sin imagen</p>
+                                <p class="text-xs opacity-75">Esta publicación no tiene imagen</p>
+                            </div>
+                        </div>
+                        
                         <!-- Overlay para contenido de pago -->
                         <div 
                             v-if="post.subscripcion && !userHasActiveSubscription"

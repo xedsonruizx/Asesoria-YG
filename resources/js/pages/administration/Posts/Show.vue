@@ -2,7 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { show as postShow, index as postsIndex } from '@/routes/posts';
 import { type BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { ArrowLeft, Calendar, Tag, User, FileText, Image, Video, Download, Lock } from 'lucide-vue-next';
 
@@ -87,6 +87,23 @@ const imageType = computed(() => props.post.image_path ? getFileType(props.post.
 const fileType = computed(() => props.post.file_path ? getFileType(props.post.file_path) : null);
 // URL de imagen de respaldo (imagen base64 simple)
 const fallbackImageUrl = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMTgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIiBmaWxsPSIjOTk5Ij5JbWFnZW4gbm8gZGlzcG9uaWJsZTwvdGV4dD48L3N2Zz4=';
+
+// Agregar funciones para las acciones
+const editPost = () => {
+    // Navegar a la página de edición sin refresco
+    $inertia.visit(`/posts/${props.post.id}/edit`);
+};
+
+const duplicatePost = () => {
+    // Lógica para duplicar post
+    console.log('Duplicar post:', props.post.id);
+};
+
+const deletePost = () => {
+    if (confirm('¿Estás seguro de que quieres eliminar esta publicación?')) {
+        $inertia.delete(`/posts/${props.post.id}`);
+    }
+};
 </script>
 
 <template>
@@ -96,13 +113,13 @@ const fallbackImageUrl = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWln
         <div class="flex h-full flex-1 flex-col gap-6 overflow-x-auto rounded-xl p-4">
             <!-- Header con botón de regreso -->
             <div class="flex items-center gap-4">
-                <button 
-                    @click="$inertia.visit(postsIndex().url)"
+                <Link 
+                    :href="postsIndex().url"
                     class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted"
                 >
                     <ArrowLeft class="h-4 w-4" />
                     Volver a publicaciones
-                </button>
+                </Link>
             </div>
 
             <!-- Contenido principal -->
@@ -328,13 +345,22 @@ const fallbackImageUrl = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWln
                     <div class="bg-card rounded-lg p-6 shadow-sm border border-border">
                         <h3 class="text-lg font-semibold text-foreground mb-4">Acciones</h3>
                         <div class="space-y-2">
-                            <button class="w-full inline-flex items-center justify-center px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors">
+                            <button 
+                                @click="editPost"
+                                class="w-full inline-flex items-center justify-center px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                            >
                                 Editar publicación
                             </button>
-                            <button class="w-full inline-flex items-center justify-center px-4 py-2 text-sm font-medium bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 transition-colors">
+                            <button 
+                                @click="duplicatePost"
+                                class="w-full inline-flex items-center justify-center px-4 py-2 text-sm font-medium bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 transition-colors"
+                            >
                                 Duplicar
                             </button>
-                            <button class="w-full inline-flex items-center justify-center px-4 py-2 text-sm font-medium bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 transition-colors">
+                            <button 
+                                @click="deletePost"
+                                class="w-full inline-flex items-center justify-center px-4 py-2 text-sm font-medium bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 transition-colors"
+                            >
                                 Eliminar
                             </button>
                         </div>
