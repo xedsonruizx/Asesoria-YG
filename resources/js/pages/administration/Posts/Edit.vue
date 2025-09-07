@@ -1,498 +1,695 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useForm } from '@inertiajs/vue3'
-import { edit, update } from '@/routes/posts'
-import { router } from '@inertiajs/vue3'
+import { ref, computed, onMounted } from 'vue';
+import { Head, router, Link  } from '@inertiajs/vue3';
+import AppLayout from '@/layouts/AppLayout.vue';
+import { index as postsIndex, show as postShow, update } from '@/routes/posts';
+import { ArrowLeft, Save, FileText, ImageIcon, Upload, X, Download, Image, Video } from 'lucide-vue-next';
+import { useForm } from '@inertiajs/vue3';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import InputError from '@/components/InputError.vue';
+import AttachedFiles from '@/components/AttachedFiles.vue'
+
+// Obtener la función route desde las props de la página
+const route = (name: string, params?: any) => {
+    return page.props.ziggy.routes[name] ? 
+        page.props.ziggy.routes[name].uri.replace(/\{[^}]+\}/g, (match: string) => {
+            const param = match.slice(1, -1);
+            return params && params[param] ? params[param] : match;
+        }) : name;
+};
+interface PostForm {
+    id: number;
+    title: string;
+    content: string;
+    meta_description: string;
+    status: 'draft' | 'published' | 'archived';
+    is_premium: boolean;
+    featured_image: File | null;
+    file: File | null;
+    tag_categories: number[];
+}
 
 interface Props {
-  post: {
-    id: number
-    title: string
-    content: string
-    excerpt: string
-    image?: string
-    file?: string
-    status: 'draft' | 'published'
-    is_premium: boolean
-    slug: string
-    meta_description?: string
-    tags?: Array<{
-      id: number
-      name: string
-      color: string
-      slug: string
-    }>
-    author_id: number
-    published_at?: string
-    created_at: string
-    updated_at: string
-  }
-  availableTags: Array<{
-    id: number
-    name: string
-    color: string
-    slug: string
-  }>
+    post: {
+        id: number;
+        title: string;
+        content: string;
+        meta_description: string;
+        status: 'draft' | 'published' | 'archived';
+        is_premium: boolean;
+        image_path?: string;
+        file_path?: string;
+        tag_categories?: Array<{ id: number; name: string; color: string; slug: string; }>;
+    };
+    availableTags?: Array<{
+        id: number;
+        name: string;
+        color: string;
+        slug: string;
+    }>;
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+    post: () => ({
+        id: 0,
+        title: '',
+        content: '',
+        meta_description: '',
+        status: 'draft',
+        is_premium: false,
+        image_path: undefined,
+        file_path: undefined,
+        tag_categories: []
+    }),
+    availableTags: () => []
+});
 
-const form = useForm({
-  title: props.post.title,
-  content: props.post.content,
-  excerpt: props.post.excerpt,
-  image: null as File | null,
-  file: null as File | null,
-  status: props.post.status,
-  is_premium: props.post.is_premium,
-  slug: props.post.slug,
-  meta_description: props.post.meta_description || '',
-  tags: props.post.tags?.map(tag => tag.id) || [],
-  _method: 'PUT'
-})
+// Verificación defensiva
+if (!props.post || typeof props.post !== 'object') {
+    console.error('Post data is invalid:', props.post);
+}
+const form = useForm<PostForm>({
+    id: props.post.id,
+    title: props.post.title,
+    content: props.post.content,
+    meta_description: props.post.meta_description,
+    status: props.post.status,
+    is_premium: props.post.is_premium || false,
+    featured_image: null, // Correcto
+    file: null, // Correcto
+    tag_categories: props.post.tag_categories ? props.post.tag_categories.map(tag => tag.id) : []
+});
 
-const imagePreview = ref<string | null>(props.post.image || null)
-const filePreview = ref<string | null>(props.post.file || null)
-const isLoading = ref(false)
+const imageInputRef = ref<HTMLInputElement>();
+const fileInputRef = ref<HTMLInputElement>();
+const imagePreview = ref<string | null>(null);
+const isDragOver = ref(false);
+const isFileDragOver = ref(false);
 
-const handleImageChange = (event: Event) => {
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  
-  if (file) {
-    form.image = file
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      imagePreview.value = e.target?.result as string
+const breadcrumbs = [
+    { title: 'Dashboard', href: '/dashboard' },
+    { title: 'Publicaciones', href: postsIndex().url },
+    { title: props.post.title, href: postShow(props.post.id).url },
+    { title: 'Editar Publicación', current: true },
+];
+
+// Funciones para manejo de imagen destacada
+const handleImageUpload = (event: Event) => {
+    const target = event.target as HTMLInputElement;
+    const file = target.files?.[0];
+    if (file) {
+        // Validar tamaño de imagen (2MB máximo)
+        if (file.size > 2048 * 1024) {
+            alert('La imagen no puede ser mayor a 2MB');
+            return;
+        }
+        
+        // Validar tipo de archivo
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif'];
+        if (!allowedTypes.includes(file.type)) {
+            alert('Solo se permiten archivos JPG, PNG y GIF');
+            return;
+        }
+        
+        form.featured_image = file;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            imagePreview.value = e.target?.result as string;
+        };
+        reader.readAsDataURL(file);
     }
-    reader.readAsDataURL(file)
-  }
-}
+};
 
-const handleFileChange = (event: Event) => {
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  
-  if (file) {
-    form.file = file
-    filePreview.value = file.name
-  }
-}
+const handleImageDragOver = (event: DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    isDragOver.value = true;
+};
+
+const handleImageDragLeave = () => {
+    isDragOver.value = false;
+};
+
+const handleImageDrop = (event: DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    isDragOver.value = false;
+    
+    const files = event.dataTransfer?.files;
+    if (files && files.length > 0) {
+        const file = files[0];
+        if (file.type.startsWith('image/')) {
+            form.featured_image = file;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.value = e.target?.result as string;
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+};
 
 const removeImage = () => {
-  form.image = null
-  imagePreview.value = null
-  const input = document.getElementById('image') as HTMLInputElement
-  if (input) input.value = ''
-}
+    form.featured_image = null;
+    imagePreview.value = null;
+    if (imageInputRef.value) {
+        imageInputRef.value.value = '';
+    }
+};
+
+// Funciones para manejo de archivos
+const handleFileUpload = (event: Event) => {
+    const target = event.target as HTMLInputElement;
+    const file = target.files?.[0];
+    if (file) {
+        // Validar tamaño de archivo (10MB máximo)
+        if (file.size > 10240 * 1024) {
+            alert('El archivo no puede ser mayor a 10MB');
+            return;
+        }
+        
+        form.file = file;
+    }
+};
+
+const handleFileDragOver = (event: DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    isFileDragOver.value = true;
+};
+
+const handleFileDragLeave = () => {
+    isFileDragOver.value = false;
+};
+
+const handleFileDrop = (event: DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    isFileDragOver.value = false;
+    
+    const files = event.dataTransfer?.files;
+    if (files && files.length > 0) {
+        const file = files[0];
+        form.file = file;
+    }
+};
 
 const removeFile = () => {
-  form.file = null
-  filePreview.value = null
-  const input = document.getElementById('file') as HTMLInputElement
-  if (input) input.value = ''
-}
-
-const generateSlug = () => {
-  if (form.title) {
-    form.slug = form.title
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .trim()
-  }
-}
-
-const submitForm = () => {
-  isLoading.value = true
-  
-  form.transform((data) => ({
-    ...data,
-    _method: 'PUT'
-  })).post(update.url({ post: props.post.id }), {
-    onSuccess: () => {
-      isLoading.value = false
-      router.visit('/administration/posts')
-    },
-    onError: () => {
-      isLoading.value = false
+    form.file = null;
+    if (fileInputRef.value) {
+        fileInputRef.value.value = '';
     }
-  })
+};
+
+
+// Computed properties para URLs de archivos existentes
+const currentImageUrl = computed(() => {
+    if (props.post.image_path) {
+        return `/storage/${props.post.image_path}`;
+    }
+    return null;
+});
+
+const currentFileUrl = computed(() => {
+    return props.post.file_path ? `/storage/${props.post.file_path}` : null;
+});
+
+// Función para cargar automáticamente los archivos actuales
+const loadCurrentFilesAutomatically = async () => {
+    try {
+        // Cargar imagen destacada actual si existe
+        if (props.post.image_path && currentImageUrl.value) {
+            const imageResponse = await fetch(currentImageUrl.value);
+            if (imageResponse.ok) {
+                const imageBlob = await imageResponse.blob();
+                const imageFile = new File([imageBlob], `imagen-${props.post.id}.${imageBlob.type.split('/')[1]}`, {
+                    type: imageBlob.type
+                });
+                
+                form.featured_image = imageFile;
+                
+                // Crear preview de la imagen
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    imagePreview.value = e.target?.result as string;
+                };
+                reader.readAsDataURL(imageFile);
+                
+                console.log('✅ Imagen destacada cargada automáticamente');
+            }
+        }
+        
+        // Cargar archivo adjunto actual si existe
+        if (props.post.file_path && currentFileUrl.value) {
+            const fileResponse = await fetch(currentFileUrl.value);
+            if (fileResponse.ok) {
+                const fileBlob = await fileResponse.blob();
+                const fileName = props.post.file_path.split('/').pop() || `archivo-${props.post.id}`;
+                const attachedFile = new File([fileBlob], fileName, {
+                    type: fileBlob.type
+                });
+                
+                form.file = attachedFile;
+                console.log('✅ Archivo adjunto cargado automáticamente');
+            }
+        }
+        
+        if (props.post.image_path || props.post.file_path) {
+            console.log('🔄 Archivos actuales cargados automáticamente en el formulario');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error al cargar archivos automáticamente:', error);
+    }
+};
+
+// Ejecutar carga automática al montar el componente
+onMounted(() => {
+    loadCurrentFilesAutomatically();
+});
+
+// Función para detectar tipo de archivo
+const getFileType = (filePath: string) => {
+    if (!filePath) return null;
+    const extension = filePath.split('.').pop()?.toLowerCase();
+    
+    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
+    const videoExtensions = ['mp4', 'webm', 'ogg', 'avi', 'mov'];
+    const audioExtensions = ['mp3', 'wav', 'ogg', 'aac'];
+    
+    if (imageExtensions.includes(extension || '')) return 'image';
+    if (videoExtensions.includes(extension || '')) return 'video';
+    if (audioExtensions.includes(extension || '')) return 'audio';
+    return 'document';
+};
+
+// Función para cargar archivos actuales en el formulario
+const loadCurrentFiles = async () => {
+    try {
+        // Cargar imagen actual si existe
+        if (props.post.image_path && currentImageUrl.value) {
+            const imageResponse = await fetch(currentImageUrl.value);
+            if (imageResponse.ok) {
+                const imageBlob = await imageResponse.blob();
+                const imageFile = new File([imageBlob], props.post.image_path.split('/').pop() || 'image.jpg', {
+                    type: imageBlob.type
+                });
+                form.featured_image = imageFile;
+                imagePreview.value = currentImageUrl.value;
+                console.log('Imagen actual cargada:', imageFile.name);
+            }
+        }
+        
+        // Cargar archivo actual si existe
+        if (props.post.file_path && currentFileUrl.value) {
+            const fileResponse = await fetch(currentFileUrl.value);
+            if (fileResponse.ok) {
+                const fileBlob = await fileResponse.blob();
+                const fileName = props.post.file_path.split('/').pop() || 'archivo';
+                const file = new File([fileBlob], fileName, {
+                    type: fileBlob.type
+                });
+                form.file = file;
+                console.log('Archivo actual cargado:', file.name);
+            }
+        }
+        
+        alert('Archivos actuales cargados en el formulario exitosamente');
+    } catch (error) {
+        console.error('Error al cargar archivos actuales:', error);
+        alert('Error al cargar los archivos actuales');
+    }
+};
+
+// Función de envío del formulario
+const submitForm = (status: 'draft' | 'published' | 'archived') => {
+
+    // Validaciones mejoradas
+    if (!form.title || form.title.trim() === '') {
+        alert('El título es obligatorio');
+        console.log('Validación falló: título vacío');
+        return;
+    }
+    
+    if (!form.content || form.content.trim() === '') {
+        alert('El contenido es obligatorio');
+        console.log('Validación falló: contenido vacío');
+        return;
+    }
+    
+    if (!form.tag_categories || !Array.isArray(form.tag_categories) || form.tag_categories.length === 0) {
+        alert('Debe seleccionar al menos un tag');
+        console.log('Validación falló: tags vacíos', form.tag_categories);
+        return;
+    }
+    
+    if (!form.meta_description || form.meta_description.trim() === '') {
+        alert('La meta descripción es obligatoria');
+        console.log('Validación falló: meta descripción vacía');
+        return;
+    }
+    
+    console.log('Todas las validaciones pasaron, enviando formulario...');
+    
+    form.status = status;
+    
+
+
+
+declare global {
+    function route(name: string, params?: any): string;
 }
 
-const saveDraft = () => {
-  form.status = 'draft'
-  submitForm()
-}
 
-const publish = () => {
-  form.status = 'published'
-  submitForm()
-}
+    // Debug: verificar datos antes del envío
+    console.log('Datos del formulario antes del envío:', {
+        id: form.id,
+        title: form.title,
+        content: form.content,
+        meta_description: form.meta_description,
+        status: form.status,
+        is_premium: form.is_premium,
+        tag_categories: form.tag_categories,
+        featured_image: form.featured_image,
+        file: form.file
+    });
+    
+    // Usar la ruta POST específica para archivos
+    form.post(`/posts/${props.post.id}/update-with-files`, {
+        forceFormData: true,
+        onSuccess: () => {
+            console.log('Formulario enviado exitosamente');
+            router.visit(`/posts/${props.post.id}`);
+        },
+        onError: (errors) => {
+            console.error('Errores de validación:', errors);
+            alert('Error al actualizar la publicación. Revisa la consola para más detalles.');
+        },
+        onBefore: () => {
+            console.log('Iniciando envío del formulario...');
+        },
+        onFinish: () => {
+            console.log('Envío del formulario completado');
+        }
+    });
+};
 
-const wordCount = computed(() => {
-  return form.content ? form.content.split(/\s+/).filter(word => word.length > 0).length : 0
-})
+const saveDraft = () => submitForm('draft');
+const publish = () => submitForm('published');
 
-const characterCount = computed(() => {
-  return form.content ? form.content.length : 0
-})
+const goBack = () => {
+    router.visit(postShow(props.post.id).url);
+};
+
+
+
+
+
+// Llamar debugForm() antes de submitForm para ver qué campo está causando el problema
+// console.log('Props recibidas:', props);
+// console.log('Post data:', props.post);
+// console.log('Available tags:', props.availableTags);
+
+
+
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 py-8">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-      <!-- Header -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-        <div class="px-6 py-4 border-b border-gray-200">
-          <div class="flex items-center justify-between">
-            <div>
-              <h1 class="text-2xl font-bold text-gray-900">Editar Publicación</h1>
-              <p class="text-sm text-gray-600 mt-1">Modifica los detalles de tu publicación</p>
-            </div>
-            <div class="flex space-x-3">
-              <button
-                @click="saveDraft"
-                :disabled="isLoading"
-                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                <span v-if="isLoading && form.status === 'draft'" class="flex items-center">
-                  <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Guardando...
-                </span>
-                <span v-else>Guardar Borrador</span>
-              </button>
-              <button
-                @click="publish"
-                :disabled="isLoading"
-                class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                <span v-if="isLoading && form.status === 'published'" class="flex items-center">
-                  <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Actualizando...
-                </span>
-                <span v-else>Actualizar Publicación</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <form @submit.prevent="submitForm" class="space-y-6">
-        <!-- Información básica -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div class="px-6 py-4 border-b border-gray-200">
-            <h2 class="text-lg font-medium text-gray-900">Información Básica</h2>
-          </div>
-          <div class="px-6 py-4 space-y-6">
-            <!-- Título -->
-            <div>
-              <label for="title" class="block text-sm font-medium text-gray-700 mb-2">
-                Título *
-              </label>
-              <input
-                id="title"
-                v-model="form.title"
-                type="text"
-                required
-                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Ingresa el título de la publicación"
-                @input="generateSlug"
-              />
-              <div v-if="form.errors.title" class="mt-1 text-sm text-red-600">{{ form.errors.title }}</div>
-            </div>
-
-            <!-- Slug -->
-            <div>
-              <label for="slug" class="block text-sm font-medium text-gray-700 mb-2">
-                Slug (URL amigable) *
-              </label>
-              <input
-                id="slug"
-                v-model="form.slug"
-                type="text"
-                required
-                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="url-amigable-del-post"
-              />
-              <p class="mt-1 text-sm text-gray-500">Se genera automáticamente desde el título, pero puedes editarlo</p>
-              <div v-if="form.errors.slug" class="mt-1 text-sm text-red-600">{{ form.errors.slug }}</div>
-            </div>
-
-            <!-- Categoría -->
-            <div>
-              <label for="category_id" class="block text-sm font-medium text-gray-700 mb-2">
-                Categoría
-              </label>
-              <select
-                id="category_id"
-                v-model="form.category_id"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">Selecciona una categoría</option>
-                <option v-for="category in categories" :key="category.id" :value="category.id">
-                  {{ category.name }}
-                </option>
-              </select>
-              <div v-if="form.errors.category_id" class="mt-1 text-sm text-red-600">{{ form.errors.category_id }}</div>
-            </div>
-
-            <!-- Extracto -->
-            <div>
-              <label for="excerpt" class="block text-sm font-medium text-gray-700 mb-2">
-                Extracto *
-              </label>
-              <textarea
-                id="excerpt"
-                v-model="form.excerpt"
-                rows="3"
-                required
-                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Breve descripción de la publicación (máximo 160 caracteres)"
-                maxlength="160"
-              ></textarea>
-              <div class="flex justify-between mt-1">
-                <div v-if="form.errors.excerpt" class="text-sm text-red-600">{{ form.errors.excerpt }}</div>
-                <div class="text-sm text-gray-500">{{ form.excerpt?.length || 0 }}/160 caracteres</div>
-              </div>
-            </div>
-
-            <!-- Meta descripción -->
-            <div>
-              <label for="meta_description" class="block text-sm font-medium text-gray-700 mb-2">
-                Meta Descripción (SEO)
-              </label>
-              <textarea
-                id="meta_description"
-                v-model="form.meta_description"
-                rows="2"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Descripción para motores de búsqueda (máximo 160 caracteres)"
-                maxlength="160"
-              ></textarea>
-              <div class="flex justify-between mt-1">
-                <div v-if="form.errors.meta_description" class="text-sm text-red-600">{{ form.errors.meta_description }}</div>
-                <div class="text-sm text-gray-500">{{ form.meta_description?.length || 0 }}/160 caracteres</div>
-              </div>
-            </div>
-
-            <!-- Tags -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                Tags de Categoría
-              </label>
-              <div class="space-y-2 max-h-40 overflow-y-auto border border-gray-300 rounded-md p-3">
-                <div 
-                  v-for="tag in availableTags" 
-                  :key="tag.id"
-                  class="flex items-center space-x-2"
-                >
-                  <input
-                    :id="`tag-${tag.id}`"
-                    v-model="form.tags"
-                    :value="tag.id"
-                    type="checkbox"
-                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label 
-                    :for="`tag-${tag.id}`" 
-                    class="flex items-center space-x-2 cursor-pointer flex-1"
-                  >
-                    <span 
-                      class="inline-block w-3 h-3 rounded-full"
-                      :style="{ backgroundColor: tag.color }"
-                    ></span>
-                    <span class="text-sm text-gray-700">{{ tag.name }}</span>
-                  </label>
+    <Head title="Editar Publicación" />
+    
+    <AppLayout :breadcrumbs="breadcrumbs">
+        <div class="flex h-full flex-1 flex-col gap-6 overflow-x-auto rounded-xl p-4">
+            <!-- Header -->
+            <div class="">
+                <div class="bg-card rounded-lg p-6 shadow-sm border border-border">
+                    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
+                        <div class="flex-1">
+                            <h1 class="text-xl sm:text-2xl font-bold mb-2 text-foreground">Editar Publicación</h1>
+                            <p class="text-muted-foreground text-sm sm:text-base">Modifica los detalles de tu publicación</p>
+                        </div>
+                        <div class="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
+                            <button
+                                @click="submitForm(form.status)"
+                                :disabled="form.processing || !form.title?.trim() || !form.content?.trim() || !form.tag_categories?.length || !form.meta_description?.trim()"
+                                class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-md transition-colors disabled:opacity-50"
+                            >
+                                <Save class="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                                <span class="truncate">{{ form.processing ? 'Actualizando...' : (form.status === 'draft' ? 'Guardar Borrador' : 'Actualizar Publicación') }}</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
-              </div>
-              <p class="mt-1 text-sm text-gray-500">Selecciona las categorías que aplican a esta publicación</p>
-              <div v-if="form.errors.tags" class="mt-1 text-sm text-red-600">{{ form.errors.tags }}</div>
             </div>
-          </div>
-        </div>
 
-        <!-- Contenido -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div class="px-6 py-4 border-b border-gray-200">
-            <h2 class="text-lg font-medium text-gray-900">Contenido</h2>
-          </div>
-          <div class="px-6 py-4">
-            <label for="content" class="block text-sm font-medium text-gray-700 mb-2">
-              Contenido de la publicación *
-            </label>
-            <textarea
-              id="content"
-              v-model="form.content"
-              rows="15"
-              required
-              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
-              placeholder="Escribe el contenido de tu publicación aquí..."
-            ></textarea>
-            <div class="flex justify-between mt-2">
-              <div v-if="form.errors.content" class="text-sm text-red-600">{{ form.errors.content }}</div>
-              <div class="text-sm text-gray-500">
-                {{ wordCount }} palabras • {{ characterCount }} caracteres
-              </div>
-            </div>
-          </div>
-        </div>
+            <!-- Main Content -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Main Form -->
+                <div class="lg:col-span-2">
+                    <div class="rounded-lg border bg-card p-6 shadow-sm">
+                        <h2 class="mb-6 text-lg font-semibold text-card-foreground">Información Básica</h2>
+                        
+                        <div class="flex flex-col gap-6">
+                            <!-- Título -->
+                            <div class="grid gap-2">
+                                <Label for="title">Título de la publicación</Label>
+                                <Input
+                                    id="title"
+                                    v-model="form.title"
+                                    type="text"
+                                    placeholder="Ingresa el título de tu publicación"
+                                    required
+                                    :class="{ 'aria-invalid': form.errors.title }"
+                                />
+                                <InputError :message="form.errors.title" />
+                            </div>
 
-        <!-- Multimedia -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div class="px-6 py-4 border-b border-gray-200">
-            <h2 class="text-lg font-medium text-gray-900">Multimedia</h2>
-          </div>
-          <div class="px-6 py-4 space-y-6">
-            <!-- Imagen destacada -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                Imagen Destacada
-              </label>
-              <div class="space-y-4">
-                <div v-if="imagePreview" class="relative inline-block">
-                  <img :src="imagePreview" alt="Vista previa" class="w-32 h-32 object-cover rounded-lg border border-gray-300" />
-                  <button
-                    @click="removeImage"
-                    type="button"
-                    class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
-                  >
-                    ×
-                  </button>
+                            <!-- Meta Descripción -->
+                            <div class="grid gap-2">
+                                <Label for="meta_description">Meta Descripción</Label>
+                                <textarea
+                                    id="meta_description"
+                                    v-model="form.meta_description"
+                                    rows="3"
+                                    class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    placeholder="Descripción breve para SEO (máximo 160 caracteres)"
+                                    maxlength="160"
+                                    required
+                                ></textarea>
+                                <div class="flex justify-between text-xs text-muted-foreground">
+                                    <span>Descripción para motores de búsqueda</span>
+                                    <span>{{ form.meta_description?.length }}/160</span>
+                                </div>
+                                <InputError :message="form.errors.meta_description" />
+                            </div>
+
+                            <!-- Contenido -->
+                            <div class="grid gap-2">
+                                <Label for="content">Contenido</Label>
+                                <textarea
+                                    id="content"
+                                    v-model="form.content"
+                                    rows="12"
+                                    class="flex min-h-[200px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    placeholder="Escribe el contenido de tu publicación aquí..."
+                                    required
+                                ></textarea>
+                                <InputError :message="form.errors.content" />
+                            </div>
+
+                            <!-- Imagen Destacada -->
+                            <div class="grid gap-2">
+                                <Label>Imagen Destacada</Label>
+                                
+                                <div 
+                                    class="relative rounded-lg border-2 border-dashed border-input p-6 text-center transition-colors"
+                                    :class="{
+                                        'border-primary bg-primary/5': isDragOver,
+                                        'hover:border-primary/50 hover:bg-accent/50': !isDragOver
+                                    }"
+                                    @drop="handleImageDrop"
+                                    @dragover="handleImageDragOver"
+                                    @dragleave="handleImageDragLeave"
+                                >
+                                    <div v-if="!imagePreview && !form.featured_image" class="space-y-2">
+                                        <div class="mx-auto h-12 w-12 text-muted-foreground">
+                                            <ImageIcon class="h-full w-full" />
+                                        </div>
+                                        <div class="text-sm text-muted-foreground">
+                                            <span class="font-medium text-primary">Haz clic para subir</span> o arrastra una imagen aquí
+                                        </div>
+                                        <p class="text-xs text-muted-foreground">PNG, JPG, GIF hasta 2MB</p>
+                                    </div>
+                                    
+                                    <div v-else class="space-y-2">
+                                        <div class="relative mx-auto h-32 w-32 overflow-hidden rounded-lg">
+                                            <img 
+                                                :src="imagePreview || '/storage/' + props.post.image_path" 
+                                                alt="Preview" 
+                                                class="h-full w-full object-cover"
+                                            >
+                                        </div>
+                                        <p class="text-xs text-muted-foreground">{{ form.featured_image?.name || 'Imagen actual' }}</p>
+                                    </div>
+                                    
+                                    <input 
+                                        ref="imageInputRef"
+                                        type="file" 
+                                        accept="image/*" 
+                                        class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                        @change="handleImageUpload"
+                                    >
+                                </div>
+                                <InputError :message="form.errors.featured_image" />
+                                <Button  v-if="form.featured_image" type="button" variant="outline" size="sm" @click="removeImage">
+                                        Remover imagen
+                                </Button>
+                            </div>
+
+                            
+
+                            <!-- Archivo Adjunto -->
+                            <div class="grid gap-2">
+                                <Label>Archivo Adjunto</Label>
+                                <div 
+                                    class="relative rounded-lg border-2 border-dashed border-input p-6 text-center transition-colors"
+                                    :class="{
+                                        'border-primary bg-primary/5': isFileDragOver,
+                                        'hover:border-primary/50 hover:bg-accent/50': !isFileDragOver
+                                    }"
+                                    @drop="handleFileDrop"
+                                    @dragover="handleFileDragOver"
+                                    @dragleave="handleFileDragLeave"
+                                >
+                                    <div v-if="!form.file" class="space-y-2">
+                                        <div class="mx-auto h-12 w-12 text-muted-foreground">
+                                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                            </svg>
+                                        </div>
+                                        <div class="text-sm text-muted-foreground">
+                                            <span class="font-medium text-primary">Haz clic para subir</span> o arrastra un archivo aquí
+                                        </div>
+                                        <p class="text-xs text-muted-foreground">PDF, DOC, DOCX, TXT, ZIP hasta 10MB</p>
+                                        <input 
+                                            ref="fileInputRef"
+                                            type="file" 
+                                            accept=".pdf,.doc,.docx,.txt,.zip,.rar"
+                                            class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                            @change="handleFileUpload"
+                                        >
+                                    </div>
+                                    
+                                    <div v-else class="space-y-2">
+                                        <div class="flex items-center justify-center space-x-2">
+                                            <FileText class="h-8 w-8 text-primary" />
+                                            <div class="text-left">
+                                                <p class="text-sm font-medium text-foreground">{{ form.file.name }}</p>
+                                                <p class="text-xs text-muted-foreground">{{ (form.file.size / 1024 / 1024).toFixed(2) }} MB</p>
+                                            </div>
+                                        </div>
+                                        <Button v-if="form.file" type="button" variant="outline" size="sm" class="relative z-10" @click="removeFile">
+                                            Remover archivo
+                                        </Button>
+                                    </div>
+                                </div>
+                                <InputError :message="form.errors.file" />
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <input
-                  id="image"
-                  type="file"
-                  accept="image/*"
-                  @change="handleImageChange"
-                  class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                />
-              </div>
-              <p class="mt-1 text-sm text-gray-500">Formatos soportados: JPG, PNG, GIF. Tamaño máximo: 2MB</p>
-              <div v-if="form.errors.image" class="mt-1 text-sm text-red-600">{{ form.errors.image }}</div>
-            </div>
 
-            <!-- Archivo adjunto -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                Archivo Adjunto
-              </label>
-              <div class="space-y-4">
-                <div v-if="filePreview" class="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd" />
-                  </svg>
-                  <span class="text-sm text-gray-700 flex-1">{{ filePreview }}</span>
-                  <button
-                    @click="removeFile"
-                    type="button"
-                    class="text-red-500 hover:text-red-700 text-sm"
-                  >
-                    Eliminar
-                  </button>
+
+
+
+
+                
+
+                <!-- Sidebar -->
+                <div class="space-y-6">
+                    <!-- Tags -->
+                    <div class="rounded-lg border bg-card p-6 shadow-sm">
+                        <h3 class="mb-4 text-lg font-semibold text-card-foreground">Tags de Categoría</h3>
+                        
+                        <div class="grid gap-4">
+                            <div v-if="props.availableTags.length === 0" class="text-center py-4">
+                                <p class="text-sm text-muted-foreground">No hay tags disponibles</p>
+                            </div>
+                            
+                            <div v-else class="max-h-64 space-y-3 overflow-y-auto">
+                                <label 
+                                    v-for="tag in props.availableTags" 
+                                    :key="tag.id"
+                                    class="flex items-center space-x-3 cursor-pointer p-2 rounded-md hover:bg-accent transition-colors"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        :value="tag.id"
+                                        v-model="form.tag_categories"
+                                        class="rounded border-gray-300 text-primary focus:ring-primary"
+                                    >
+                                    <div class="flex items-center space-x-2">
+                                        <span 
+                                            class="inline-block w-3 h-3 rounded-full" 
+                                            :style="{ backgroundColor: tag.color }"
+                                        ></span>
+                                        <span class="text-sm font-medium text-foreground">{{ tag.name }}</span>
+                                    </div>
+                                </label>
+                            </div>
+                            <InputError :message="form.errors.tag_categories" />
+                        </div>
+                    </div>
+
+          
+               
+
+                    <!-- Configuración -->
+                    <div class="bg-card rounded-lg p-6 shadow-sm border border-border">
+                        <h3 class="mb-4 text-lg font-semibold text-card-foreground">Configuración</h3>
+                        
+                        <div class="space-y-4">
+                            <!-- Estado -->
+                            <div class="grid gap-2">
+                                <Label for="status">Estado</Label>
+                                <select
+                                    id="status"
+                                    v-model="form.status"
+                                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    required
+                                >
+                                    <option value="draft">Borrador</option>
+                                    <option value="published">Publicado</option>
+                                </select>
+                                <InputError :message="form.errors.status" />
+                            </div>
+
+                            <!-- Premium -->
+                            <div class="flex items-center space-x-2">
+                                <input
+                                    id="is_premium"
+                                    type="checkbox"
+                                    v-model="form.is_premium"
+                                    class="rounded border-gray-300 text-primary focus:ring-primary"
+                                >
+                                <Label for="is_premium" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                    Contenido Premium
+                                </Label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Archivos Actuales -->
+                    <AttachedFiles 
+                        :imageUrl="post.image_path ? `/storage/${post.image_path}` : null"
+                        :fileUrl="post.file_path ? `/storage/${post.file_path}` : null"
+                        :title="post.title"
+                    />
+
+
                 </div>
-                <input
-                  id="file"
-                  type="file"
-                  @change="handleFileChange"
-                  class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                />
-              </div>
-              <p class="mt-1 text-sm text-gray-500">Cualquier tipo de archivo. Tamaño máximo: 10MB</p>
-              <div v-if="form.errors.file" class="mt-1 text-sm text-red-600">{{ form.errors.file }}</div>
             </div>
-          </div>
         </div>
-
-        <!-- Configuración de publicación -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div class="px-6 py-4 border-b border-gray-200">
-            <h2 class="text-lg font-medium text-gray-900">Configuración de Publicación</h2>
-          </div>
-          <div class="px-6 py-4 space-y-6">
-            <!-- Estado -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-3">
-                Estado de la publicación
-              </label>
-              <div class="space-y-2">
-                <label class="flex items-center">
-                  <input
-                    v-model="form.status"
-                    type="radio"
-                    value="draft"
-                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                  />
-                  <span class="ml-2 text-sm text-gray-700">
-                    <span class="font-medium">Borrador</span>
-                    <span class="text-gray-500"> - Solo visible para ti</span>
-                  </span>
-                </label>
-                <label class="flex items-center">
-                  <input
-                    v-model="form.status"
-                    type="radio"
-                    value="published"
-                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                  />
-                  <span class="ml-2 text-sm text-gray-700">
-                    <span class="font-medium">Publicado</span>
-                    <span class="text-gray-500"> - Visible para todos los usuarios</span>
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            <!-- Contenido premium -->
-            <div>
-              <label class="flex items-start">
-                <input
-                  v-model="form.is_premium"
-                  type="checkbox"
-                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-0.5"
-                />
-                <div class="ml-3">
-                  <span class="text-sm font-medium text-gray-700">Contenido Premium</span>
-                  <p class="text-sm text-gray-500">
-                    Marca esta publicación como contenido premium. Solo los usuarios con suscripción activa podrán acceder al contenido completo.
-                  </p>
-                </div>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <!-- Información adicional -->
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div class="flex">
-            <div class="flex-shrink-0">
-              <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-              </svg>
-            </div>
-            <div class="ml-3">
-              <h3 class="text-sm font-medium text-blue-800">Información importante</h3>
-              <div class="mt-2 text-sm text-blue-700">
-                <ul class="list-disc list-inside space-y-1">
-                  <li>Los campos marcados con * son obligatorios</li>
-                  <li>Las imágenes se redimensionarán automáticamente para optimizar el rendimiento</li>
-                  <li>Los borradores solo son visibles para ti hasta que los publiques</li>
-                  <li>El contenido premium requiere suscripción activa para ser visualizado completamente</li>
-                  <li>Tamaño máximo para imágenes: 2MB</li>
-                  <li>Tamaño máximo para archivos: 10MB</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      </form>
-    </div>
-  </div>
+    </AppLayout>
 </template>

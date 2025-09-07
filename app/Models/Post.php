@@ -11,12 +11,10 @@ class Post extends Model
 
     protected $fillable = [
         'title',
-        'content',
+        'content', 
         'excerpt',
         'slug',
         'meta_description',
-        'tags',
-        'category_id',
         'status',
         'is_premium',
         'image_path',
@@ -62,11 +60,17 @@ class Post extends Model
         return $this->file_path ? asset('storage/' . $this->file_path) : null;
     }
 
-    // Agregar esta relación al modelo Post existente
+    // Relación con TagCategory
     public function tags()
     {
         return $this->belongsToMany(TagCategory::class, 'post_tag_category', 'post_id', 'tag_category_id')
                     ->withTimestamps();
+    }
+
+    // Alias para mantener consistencia con el nombre tagCategories
+    public function tagCategories()
+    {
+        return $this->tags();
     }
 
     // Scope para filtrar por tags

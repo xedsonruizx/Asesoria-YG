@@ -18,14 +18,14 @@ class UserSeeder extends Seeder
         // Limpiar la tabla antes de insertar
         DB::table('users')->truncate();
 
-        // Crear usuario administrador
-        User::create([
+        // Crear usuario administrador usando DB::table directamente
+        DB::table('users')->insert([
             'name' => 'Administrador',
             'email' => 'admin@admin.cl',
-            'password' => Hash::make('123456789'), // Contraseña del 1 al 9 encriptada
-            'email_verified_at' => now(),
-            'created_at' => now(),
-            'updated_at' => now(),
+            'password' => Hash::make('123456789'),
+            'email_verified_at' => null, // Usuario no verificado inicialmente
+            'created_at' => DB::raw('NOW()'),
+            'updated_at' => DB::raw('NOW()'),
         ]);
 
         $this->command->info('Usuario administrador creado correctamente.');

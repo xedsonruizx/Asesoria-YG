@@ -146,27 +146,27 @@ const getPageNumbers = () => {
         <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
             <!-- Header con información de publicaciones -->
             <div class="bg-card rounded-lg p-6 shadow-sm border border-border">
-                <div class="flex justify-between items-start mb-4">
-                    <div>
-                        <h1 class="text-2xl font-bold mb-2 text-foreground">Gestión de Publicaciones</h1>
-                        <p class="text-muted-foreground">Administra y visualiza todas las publicaciones del sistema</p>
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
+                    <div class="flex-1">
+                        <h1 class="text-xl sm:text-2xl font-bold mb-2 text-foreground">Gestión de Publicaciones</h1>
+                        <p class="text-muted-foreground text-sm sm:text-base">Administra y visualiza todas las publicaciones del sistema</p>
                     </div>
                     <button 
                         @click="createNewPost"
-                        class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md transition-colors font-medium"
+                        class="inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md transition-colors font-medium text-xs sm:text-sm w-full sm:w-auto"
                     >
-                        <Plus class="h-4 w-4" />
-                        Crear Nueva Publicación
+                        <Plus class="h-4 w-4 flex-shrink-0" />
+                        <span class="truncate">Crear Nueva Publicación</span>
                     </button>
                 </div>
                 
                 <!-- Estadísticas básicas -->
-                <div class="flex gap-4 flex-wrap">
-                    <div class="bg-muted px-4 py-3 rounded-md">
-                        <span class="font-semibold text-foreground">Total: {{ props.posts?.total || 0 }}</span>
+                <div class="flex gap-2 sm:gap-4 flex-wrap">
+                    <div class="bg-muted px-3 sm:px-4 py-2 sm:py-3 rounded-md flex-1 sm:flex-none">
+                        <span class="font-semibold text-foreground text-xs sm:text-sm">Total: {{ props.posts?.total || 0 }}</span>
                     </div>
-                    <div class="bg-green-50 dark:bg-green-900/20 px-4 py-3 rounded-md">
-                        <span class="font-semibold text-green-700 dark:text-green-300">Página {{ props.posts?.current_page || 1 }} de {{ props.posts?.last_page || 1 }}</span>
+                    <div class="bg-green-50 dark:bg-green-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md flex-1 sm:flex-none">
+                        <span class="font-semibold text-green-700 dark:text-green-300 text-xs sm:text-sm">Página {{ props.posts?.current_page || 1 }} de {{ props.posts?.last_page || 1 }}</span>
                     </div>
                 </div>
             </div>
@@ -246,12 +246,13 @@ const getPageNumbers = () => {
             <div class="bg-card rounded-lg overflow-hidden shadow-sm border border-border">
                 <div v-if="props.posts?.data && props.posts.data.length > 0">
                     <!-- Header de la tabla -->
-                    <div class="bg-muted border-b border-border px-4 py-3">
+                    <!-- Encabezados -->
+                    <div class="bg-muted/30 p-4 border-b border-border">
                         <div class="grid grid-cols-1 md:grid-cols-6 gap-4 font-semibold text-foreground">
                             <div class="md:col-span-2">Título y Contenido</div>
-                            <div>Tags</div>
-                            <div>Estado</div>
-                            <div>Archivos</div>
+                            <div class="hidden md:block">Tags</div>
+                            <div class="hidden md:block">Estado</div>
+                            <div class="hidden md:block">Archivos</div>
                             <div class="hidden md:block">Fecha de Creación</div>
                         </div>
                     </div>
@@ -270,10 +271,58 @@ const getPageNumbers = () => {
                                     <div class="text-sm text-muted-foreground leading-relaxed">
                                         {{ truncateContent(post.content) }}
                                     </div>
+                                    
+                                    <!-- Tags, Estado y Archivos en móvil -->
+                                    <div class="md:hidden mt-3 space-y-2">
+                                        <!-- Tags móvil -->
+                                        <div>
+                                            <span class="text-xs font-medium text-muted-foreground mr-2">Tags:</span>
+                                            <div v-if="post.tags && post.tags.length > 0" class="inline-flex flex-wrap gap-1">
+                                                <span 
+                                                    v-for="tag in post.tags" 
+                                                    :key="tag.id"
+                                                    :style="{ backgroundColor: tag.color }"
+                                                    class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white"
+                                                >
+                                                    {{ tag.name }}
+                                                </span>
+                                            </div>
+                                            <span v-else class="text-xs text-muted-foreground italic">
+                                                Sin tags
+                                            </span>
+                                        </div>
+                                        
+                                        <!-- Estado móvil -->
+                                        <div>
+                                            <span class="text-xs font-medium text-muted-foreground mr-2">Estado:</span>
+                                            <span :class="getStatusColor(post.status) + ' inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium'">
+                                                {{ getStatusLabel(post.status) }}
+                                            </span>
+                                        </div>
+                                        
+                                        <!-- Archivos móvil -->
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span class="text-xs font-medium text-muted-foreground">Archivos:</span>
+                                            <div class="flex flex-wrap gap-1">
+                                                <span v-if="post.image_path" class="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
+                                                    📷 IMG
+                                                </span>
+                                                <span v-if="post.file_path" class="inline-flex items-center px-2 py-1 rounded text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
+                                                    📄 FILE
+                                                </span>
+                                                <span v-if="post.is_premium" class="inline-flex items-center px-2 py-1 rounded text-xs bg-pink-100 text-pink-800 dark:bg-pink-900/20 dark:text-pink-300">
+                                                    🔒 PREMIUM
+                                                </span>
+                                                <span v-if="!post.image_path && !post.file_path && !post.is_premium" class="text-xs text-muted-foreground italic">
+                                                    Sin archivos
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                                 
-                                <!-- Tags -->
-                                <div class="mt-2 md:mt-0">
+                                <!-- Tags (solo desktop) -->
+                                <div class="hidden md:block">
                                     <div v-if="post.tags && post.tags.length > 0" class="flex flex-wrap gap-1">
                                         <span 
                                             v-for="tag in post.tags" 
@@ -289,39 +338,32 @@ const getPageNumbers = () => {
                                     </span>
                                 </div>
                                 
-                                <!-- Estado -->
-                                <div class="mt-2 md:mt-0">
+                                <!-- Estado (solo desktop) -->
+                                <div class="hidden md:block">
                                     <span :class="getStatusColor(post.status) + ' inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium'">
                                         {{ getStatusLabel(post.status) }}
                                     </span>
                                 </div>
                                 
-                                <!-- Archivos -->
-                                <div class="flex gap-2 mt-2 md:mt-0">
+                                <!-- Archivos (solo desktop) -->
+                                <div class="hidden md:flex md:flex-wrap md:gap-1">
                                     <span v-if="post.image_path" class="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
                                         📷 IMG
                                     </span>
                                     <span v-if="post.file_path" class="inline-flex items-center px-2 py-1 rounded text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
                                         📄 FILE
                                     </span>
-                                    <span v-if="post.Subscripcion" class="inline-flex items-center px-2 py-1 rounded text-xs bg-pink-100 text-pink-800 dark:bg-pink-900/20 dark:text-pink-300">
+                                    <span v-if="post.is_premium" class="inline-flex items-center px-2 py-1 rounded text-xs bg-pink-100 text-pink-800 dark:bg-pink-900/20 dark:text-pink-300">
                                         🔒 PREMIUM
+                                    </span>
+                                    <span v-if="!post.image_path && !post.file_path && !post.is_premium" class="text-xs text-muted-foreground italic">
+                                        Sin archivos
                                     </span>
                                 </div>
                                 
-                                <!-- Fecha -->
-                                <div class="text-sm text-muted-foreground mt-2 md:mt-0 md:block hidden">
+                                <!-- Fecha (solo desktop) -->
+                                <div class="hidden md:block text-sm text-muted-foreground">
                                     {{ formatDate(post.created_at) }}
-                                </div>
-                                
-                                <!-- Acciones -->
-                                <div class="mt-2 md:mt-0 md:block hidden">
-                                    <button 
-                                        @click="viewPost(post)"
-                                        class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-primary hover:text-primary-foreground hover:bg-primary rounded-md transition-colors border border-primary/20 hover:border-primary"
-                                    >
-                                        Ver detalles
-                                    </button>
                                 </div>
                                 
                                 <!-- Fecha y acciones en móvil -->

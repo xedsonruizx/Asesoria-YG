@@ -15,11 +15,9 @@ return new class extends Migration
             $table->id();
             $table->string('title', 255);
             $table->string('slug')->unique();
-            $table->text('content', 60000);
+            $table->longText('content');
             $table->text('excerpt')->nullable();
             $table->string('meta_description', 160)->nullable();
-            $table->text('tags')->nullable();
-            $table->unsignedBigInteger('category_id')->nullable();
             $table->enum('status', ['draft', 'published'])->default('draft');
             $table->boolean('is_premium')->default(false);
             $table->string('image_path')->nullable();
@@ -30,7 +28,6 @@ return new class extends Migration
             
             // Índices para mejorar el rendimiento
             $table->index('status');
-            $table->index('category_id');
             $table->index('author_id');
             $table->index('published_at');
         });

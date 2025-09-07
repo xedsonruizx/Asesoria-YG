@@ -2,15 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StorePostRequest;
+use App\Http\Requests\UpdatePostRequest;
 use App\Models\Post;
 use App\Models\TagCategory;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Log;
 
-
-
-//TODO: Revisar guardado de archio, excerpt, meta_description, tags, category_id que no se estan guardando
 class PostController extends Controller
 {
     /**
@@ -60,30 +62,12 @@ class PostController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(StorePostRequest $request)
     {
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'content' => 'required|string',
-            'excerpt' => 'nullable|string|max:500',
-            'slug' => 'nullable|string|max:255|unique:posts,slug',
-            'meta_description' => 'nullable|string|max:160',
-            'status' => 'required|in:draft,published',
-            'is_premium' => 'boolean',
-            'featured_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'file' => 'nullable|file|max:10240',
-            'tags' => 'nullable|array',
-            'tags.*' => 'exists:tags_category,id',
-            'category_id' => 'nullable|exists:categories,id'
-        ]);
-        
-        // Generar slug si no se proporciona
-        if (empty($validated['slug'])) {
-            $validated['slug'] = \Illuminate\Support\Str::slug($validated['title']);
-        }
-        
+        $validated = $request->validated();
+        Log::info("store");
         // Crear un slug único para la carpeta basado en el título
-        $postSlug = \Illuminate\Support\Str::slug($validated['title']) . '-' . time();
+        $postSlug = Str::slug($validated['title']) . '-' . time();
         
         // Manejar subida de imagen
         if ($request->hasFile('featured_image')) {
@@ -106,7 +90,7 @@ class PostController extends Controller
             $originalName = $file->getClientOriginalName();
             $fileExtension = $file->getClientOriginalExtension();
             
-            $cleanFileName = \Illuminate\Support\Str::slug(pathinfo($originalName, PATHINFO_FILENAME)) . '.' . $fileExtension;
+            $cleanFileName = Str::slug(pathinfo($originalName, PATHINFO_FILENAME)) . '.' . $fileExtension;
             
             $filePath = $file->storeAs(
                 'posts/' . $postSlug, 
@@ -116,35 +100,123 @@ class PostController extends Controller
             
             $validated['file_path'] = $filePath;
         }
-    
-        // Verificar que hay un usuario autenticado
-        if (!auth()->check()) {
-            return redirect()->route('login')->with('error', 'Debes estar autenticado para crear un post.');
-        }
 
         // Crear el post
+        $publishedAt = null;
+        if ($validated['status'] === 'published') {
+            $publishedAt = Carbon::now('UTC')->format('Y-m-d H:i:s');
+        }
+        
         $post = Post::create([
             'title' => $validated['title'],
             'content' => $validated['content'],
             'excerpt' => $validated['excerpt'] ?? null,
             'slug' => $validated['slug'],
             'meta_description' => $validated['meta_description'] ?? null,
-            'category_id' => $validated['category_id'] ?? null,
             'status' => $validated['status'],
             'is_premium' => $validated['is_premium'] ?? false,
             'image_path' => $validated['image_path'] ?? null,
             'file_path' => $validated['file_path'] ?? null,
             'author_id' => auth()->id(),
-            'published_at' => $validated['status'] === 'published' ? now() : null
+            'published_at' => $publishedAt
         ]);
         
-        // Asociar tags
-        if (!empty($validated['tags'])) {
-            $post->tags()->attach($validated['tags']);
+        // Asociar tag categories
+        if (!empty($validated['tag_categories'])) {
+            $post->tagCategories()->attach($validated['tag_categories']);
+        }
+        
+        return redirect()->route('posts.index')
+            ->with('success', 'Post creado exitosamente.');
+    }
+
+    /**
+     * Update the specified resource in storage.
+     */
+    public function update(UpdatePostRequest $request, Post $post)
+    {
+        // Debug temporal
+        Log::info("update");
+        Log::info('=== UPDATE METHOD CALLED ===', [
+            'method' => $request->method(),
+            'url' => $request->url(),
+            'content_type' => $request->header('Content-Type'),
+            'has_files' => [
+                'featured_image' => $request->hasFile('featured_image'),
+                'file' => $request->hasFile('file')
+            ],
+            'all_data' => $request->all()
+        ]);
+        
+        $validated = $request->validated();
+        
+        
+        // Manejar imagen destacada
+        if ($request->hasFile('featured_image')) {
+            // Si se envía nueva imagen, eliminar la anterior y guardar la nueva
+            if ($post->image_path) {
+                Storage::disk('public')->delete($post->image_path);
+            }
+            $validated['image_path'] = $request->file('featured_image')->store('posts/images', 'public');
+        } else {
+            // Si NO se envía imagen, eliminar la existente y actualizar campo a null
+            if ($post->image_path) {
+                Storage::disk('public')->delete($post->image_path);
+                $validated['image_path'] = null;
+            }
+        }
+    
+        // Manejar archivo adjunto
+        if ($request->hasFile('file')) {
+            // Si se envía nuevo archivo, eliminar el anterior y guardar el nuevo
+            if ($post->file_path) {
+                Storage::disk('public')->delete($post->file_path);
+            }
+            $validated['file_path'] = $request->file('file')->store('posts/files', 'public');
+        } else {
+            // Si NO se envía archivo, eliminar el existente y actualizar campo a null
+            if ($post->file_path) {
+                Storage::disk('public')->delete($post->file_path);
+                $validated['file_path'] = null;
+            }
+        }
+
+        // Determinar el valor de published_at
+        $publishedAt = null;
+        if ($validated['status'] === 'published') {
+            if (isset($validated['published_at'])) {
+                $publishedAt = Carbon::parse($validated['published_at'])->format('Y-m-d H:i:s');
+            } elseif ($post->published_at) {
+                $publishedAt = $post->published_at;
+            } else {
+                $publishedAt = now()->format('Y-m-d H:i:s');
+            }
+        }
+
+        // Actualizar el post
+        $updateData = [
+            'title' => $validated['title'],
+            'content' => $validated['content'],
+            'excerpt' => $validated['excerpt'] ?? $post->excerpt,
+            'slug' => $validated['slug'],
+            'meta_description' => $validated['meta_description'],
+            'status' => $validated['status'],
+            'is_premium' => $validated['is_premium'] ?? false,
+            'image_path' => $validated['image_path'],
+            'file_path' => $validated['file_path'],
+            'published_at' => $publishedAt
+        ];
+        
+        
+        $post->update($updateData);
+    
+        // Sincronizar tag categories
+        if (isset($validated['tag_categories'])) {
+            $post->tagCategories()->sync($validated['tag_categories']);
         }
     
         return redirect()->route('posts.index')
-            ->with('success', 'Publicación creada exitosamente.');
+            ->with('success', 'Post actualizado exitosamente.');
     }
 
     /**
@@ -183,65 +255,11 @@ class PostController extends Controller
         $tags = TagCategory::active()->orderBy('name')->get();
         
         return Inertia::render('administration/Posts/Edit', [
-            'post' => $post,
-            'tags' => $tags
+            'post' => array_merge($post->toArray(), [
+                'tag_categories' => $post->tags
+            ]),
+            'availableTags' => $tags
         ]);
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, Post $post)
-    {
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'content' => 'required|string|max:60000',
-            'excerpt' => 'nullable|string|max:160',
-            'slug' => 'required|string|max:255|unique:posts,slug,' . $post->id,
-            'meta_description' => 'nullable|string|max:160',
-            'status' => 'required|in:draft,published',
-            'is_premium' => 'boolean',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'file' => 'nullable|file|max:10240',
-            'tags' => 'nullable|array',
-            'tags.*' => 'exists:tags_category,id'
-        ]);
-
-        // Manejar nueva imagen
-        if ($request->hasFile('image')) {
-            if ($post->image_path) {
-                Storage::disk('public')->delete($post->image_path);
-            }
-            $validated['image_path'] = $request->file('image')->store('posts/images', 'public');
-        }
-
-        // Manejar nuevo archivo
-        if ($request->hasFile('file')) {
-            if ($post->file_path) {
-                Storage::disk('public')->delete($post->file_path);
-            }
-            $validated['file_path'] = $request->file('file')->store('posts/files', 'public');
-        }
-
-        // Actualizar el post
-        $post->update([
-            'title' => $validated['title'],
-            'content' => $validated['content'],
-            'excerpt' => $validated['excerpt'] ?? null,
-            'slug' => $validated['slug'],
-            'meta_description' => $validated['meta_description'] ?? null,
-            'status' => $validated['status'],
-            'is_premium' => $validated['is_premium'] ?? false,
-            'image_path' => $validated['image_path'] ?? $post->image_path,
-            'file_path' => $validated['file_path'] ?? $post->file_path,
-            'published_at' => $validated['status'] === 'published' && !$post->published_at ? now() : $post->published_at
-        ]);
-        
-        // Sincronizar tags
-        $post->tags()->sync($validated['tags'] ?? []);
-
-        return redirect()->route('posts.index')
-            ->with('success', 'Publicación actualizada exitosamente.');
     }
 
     /**
@@ -249,18 +267,39 @@ class PostController extends Controller
      */
     public function destroy(Post $post)
     {
-        // Eliminar archivos asociados
+        // Eliminar archivos asociados y carpetas
+        // Usar el slug almacenado en la base de datos o reconstruirlo desde las rutas de archivos
+        $postDirectory = null;
+        
+        // Intentar obtener la carpeta desde las rutas de archivos existentes
         if ($post->image_path) {
+            $postDirectory = dirname($post->image_path);
+        } elseif ($post->file_path) {
+            $postDirectory = dirname($post->file_path);
+        }
+        
+        // Eliminar archivos individuales primero (si existen)
+        if ($post->image_path && Storage::disk('public')->exists($post->image_path)) {
             Storage::disk('public')->delete($post->image_path);
         }
-        if ($post->file_path) {
+        
+        if ($post->file_path && Storage::disk('public')->exists($post->file_path)) {
             Storage::disk('public')->delete($post->file_path);
         }
-
+        
+        // Eliminar toda la carpeta del post si se pudo determinar
+        if ($postDirectory && Storage::disk('public')->exists($postDirectory)) {
+            Storage::disk('public')->deleteDirectory($postDirectory);
+        }
+    
+        // Eliminar las relaciones many-to-many con tags
+        $post->tags()->detach();
+        
+        // Eliminar el post de la base de datos
         $post->delete();
-
+    
         return redirect()->route('posts.index')
-            ->with('success', 'Publicación eliminada exitosamente.');
+            ->with('success', 'Publicación y archivos asociados eliminados exitosamente.');
     }
 
     /**
@@ -272,7 +311,22 @@ class PostController extends Controller
             'status' => 'required|in:draft,published,Delete'
         ]);
 
-        $post->update($validated);
+        // Manejar published_at según el nuevo estado
+        $updateData = [
+            'status' => $validated['status']
+        ];
+        
+        // Si se está publicando y no tiene fecha de publicación, establecerla
+        if ($validated['status'] === 'published' && !$post->published_at) {
+            $updateData['published_at'] = now();
+        }
+        
+        // Si se está despublicando (cambiando a draft), mantener la fecha original
+        if ($validated['status'] === 'draft') {
+            // No modificamos published_at para mantener el historial
+        }
+
+        $post->update($updateData);
 
         return back()->with('success', 'Estado de la publicación actualizado.');
     }
@@ -314,4 +368,45 @@ class PostController extends Controller
             'posts' => $posts
         ]);
     }
+
+    /**
+     * Eliminar imagen destacada del post
+     */
+    public function removeImage(Post $post)
+    {
+        if ($post->image_path && Storage::disk('public')->exists($post->image_path)) {
+            Storage::disk('public')->delete($post->image_path);
+        }
+        
+        $post->update(['image_path' => null]);
+        
+        return back()->with('success', 'Imagen eliminada exitosamente.');
+    }
+    
+    /**
+     * Eliminar archivo adjunto del post
+     */
+    public function removeFile(Post $post)
+    {
+        if ($post->file_path && Storage::disk('public')->exists($post->file_path)) {
+            Storage::disk('public')->delete($post->file_path);
+        }
+        
+        $post->update(['file_path' => null]);
+        
+        return back()->with('success', 'Archivo eliminado exitosamente.');
+    }
+
+/**
+ * Método específico para actualización con archivos via POST
+ */
+public function updateWithFiles(UpdatePostRequest $request, Post $post)
+{
+    // Usar la misma lógica que update()
+    return $this->update($request, $post);
+}
+
+
+
+
 }

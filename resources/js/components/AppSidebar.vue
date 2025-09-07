@@ -5,9 +5,10 @@ import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { dashboard, login } from '@/routes';
 import { index as postsIndex } from '@/routes/posts';
+import { index as usersIndex } from '@/routes/posts';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, FileText } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, FileText, UsersRound } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
 const mainNavItems: NavItem[] = [
@@ -23,8 +24,8 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'usuarios',
-        href: dashboard(),
-        icon: LayoutGrid,
+        href: usersIndex(),
+        icon: UsersRound,
     },
         {
         title: 'membresias',

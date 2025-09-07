@@ -6,6 +6,7 @@ use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use App\Models\TagCategory;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class TagCategorySeeder extends Seeder
 {
@@ -32,10 +33,16 @@ class TagCategorySeeder extends Seeder
         ];
 
         foreach ($tags as $tagData) {
-            TagCategory::updateOrCreate(
-                ['slug' => $tagData['slug']], // Buscar por slug
-                $tagData // Datos a insertar o actualizar
+            // Usar DB::table para evitar problemas con timestamps
+            DB::table('tags_category')->updateOrInsert(
+                ['slug' => $tagData['slug']], // Condición de búsqueda
+                array_merge($tagData, [
+                    'created_at' => DB::raw('NOW()'),
+                    'updated_at' => DB::raw('NOW()'),
+                ])
             );
         }
+
+        $this->command->info('Tags de categoría creados correctamente.');
     }
 }

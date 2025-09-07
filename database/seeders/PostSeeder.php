@@ -30,6 +30,12 @@ class PostSeeder extends Seeder
         $legalTag = TagCategory::where('slug', 'legal')->first();
         $rrhhTag = TagCategory::where('slug', 'rrhh')->first();
 
+        // Verificar que las categorías existan
+        if (!$legalTag || !$rrhhTag) {
+            $this->command->error('Las categorías de tags no existen. Ejecuta primero TagCategorySeeder.');
+            return;
+        }
+
         $posts = [
             [
                 'title' => 'Guía Completa de Compliance Legal para Empresas',
@@ -37,16 +43,14 @@ class PostSeeder extends Seeder
                 'content' => 'Una guía exhaustiva sobre cómo implementar un sistema de compliance efectivo en tu empresa. Incluye templates, checklists y casos de estudio reales de empresas que han logrado certificaciones internacionales. Aprenderás sobre marcos normativos, evaluación de riesgos, implementación de controles y monitoreo continuo.',
                 'excerpt' => 'Guía exhaustiva sobre implementación de sistemas de compliance efectivos en empresas.',
                 'meta_description' => 'Aprende a implementar un sistema de compliance efectivo con templates, checklists y casos de estudio reales.',
-                'tags' => 'compliance, legal, normativas, certificaciones',
-                'category_id' => null,
                 'status' => 'published',
                 'is_premium' => true,
                 'image_path' => 'posts/legal-compliance.jpg',
                 'file_path' => 'posts/compliance-guide.pdf',
                 'author_id' => 1,
-                'published_at' => now()->subDays(30),
-                'created_at' => now()->subDays(30),
-                'updated_at' => now()->subDays(30),
+                'published_at' => DB::raw('DATE_SUB(NOW(), INTERVAL 30 DAY)'),
+                'created_at' => DB::raw('DATE_SUB(NOW(), INTERVAL 30 DAY)'),
+                'updated_at' => DB::raw('DATE_SUB(NOW(), INTERVAL 30 DAY)'),
                 'tag_categories' => [$legalTag->id]
             ],
             [
@@ -55,16 +59,14 @@ class PostSeeder extends Seeder
                 'content' => 'Descubre las mejores prácticas para atraer talento en la era digital. Desde la optimización de ofertas de trabajo hasta el uso de redes sociales profesionales y plataformas especializadas. Incluye métricas clave, herramientas recomendadas y casos de éxito.',
                 'excerpt' => 'Mejores prácticas para atraer talento en la era digital con herramientas y métricas clave.',
                 'meta_description' => 'Descubre estrategias efectivas de reclutamiento digital con métricas clave y casos de éxito.',
-                'tags' => 'reclutamiento, digital, talento, redes sociales',
-                'category_id' => null,
                 'status' => 'published',
                 'is_premium' => false,
                 'image_path' => 'posts/reclutamiento-digital.jpg',
                 'file_path' => null,
                 'author_id' => 1,
-                'published_at' => now()->subDays(25),
-                'created_at' => now()->subDays(25),
-                'updated_at' => now()->subDays(25),
+                'published_at' => DB::raw('DATE_SUB(NOW(), INTERVAL 25 DAY)'),
+                'created_at' => DB::raw('DATE_SUB(NOW(), INTERVAL 25 DAY)'),
+                'updated_at' => DB::raw('DATE_SUB(NOW(), INTERVAL 25 DAY)'),
                 'tag_categories' => [$rrhhTag->id]
             ],
             [
@@ -218,12 +220,37 @@ class PostSeeder extends Seeder
             $tagCategories = $postData['tag_categories'];
             unset($postData['tag_categories']);
             
-            // Crear el post
-            $post = Post::create($postData);
+            // Remover campos que no existen en la tabla posts
+            unset($postData['tags']);
+            unset($postData['category_id']);
             
-            // Asociar las categorías de tags
+            // Usar DB::table para evitar problemas con timestamps
+            $postId = DB::table('posts')->insertGetId([
+                'title' => $postData['title'],
+                'slug' => $postData['slug'],
+                'content' => $postData['content'],
+                'excerpt' => $postData['excerpt'],
+                'meta_description' => $postData['meta_description'],
+                'status' => $postData['status'],
+                'is_premium' => $postData['is_premium'],
+                'image_path' => $postData['image_path'],
+                'file_path' => $postData['file_path'],
+                'author_id' => $postData['author_id'],
+                'published_at' => isset($postData['published_at']) ? $postData['published_at'] : null,
+                'created_at' => DB::raw('NOW()'),
+                'updated_at' => DB::raw('NOW()')
+            ]);
+            
+            // Asociar las categorías de tags usando la tabla pivot
             if (!empty($tagCategories)) {
-                $post->tags()->attach($tagCategories);
+                foreach ($tagCategories as $tagCategoryId) {
+                    DB::table('post_tag_category')->insert([
+                        'post_id' => $postId,
+                        'tag_category_id' => $tagCategoryId,
+                        'created_at' => DB::raw('NOW()'),
+                        'updated_at' => DB::raw('NOW()')
+                    ]);
+                }
             }
         }
 

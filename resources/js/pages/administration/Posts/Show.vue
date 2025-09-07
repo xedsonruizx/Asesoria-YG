@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { show as postShow, index as postsIndex } from '@/routes/posts';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { route } from 'ziggy-js';
 import { computed, ref } from 'vue';
 import { ArrowLeft, Calendar, Tag, User, FileText, Image, Video, Download, Lock, Trash2 } from 'lucide-vue-next';
 import Delete from '@/pages/administration/Posts/Delete.vue';
-import { router } from '@inertiajs/vue3';
+import { show as postShow, index as postsIndex, edit as postEdit } from '@/routes/posts';
+import AttachedFiles from '@/components/AttachedFiles.vue'
 
 // Definir la interfaz Post
 interface Post {
@@ -34,7 +35,7 @@ interface Props {
 }
 
 const props = defineProps<Props>();
-console.log(props.post)
+// console.log(props.post)
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Publicaciones',
@@ -112,8 +113,7 @@ const handleFileImageError = () => {
 
 // Funciones para las acciones
 const editPost = () => {
-    // Navegar a la página de edición
-    window.location.href = `/administration/posts/${props.post.id}/edit`;
+    router.visit(postEdit(props.post.id).url);
 };
 
 const confirmDelete = () => {
@@ -307,98 +307,11 @@ const fileUrl = computed(() => {
                     </div>
 
                     <!-- Archivos adjuntos -->
-                    <div v-if="fileUrl || (imageUrl && imageType !== 'image' && imageType !== 'video')" class="bg-card rounded-lg p-6 shadow-sm border border-border">
-                        <h3 class="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                            <Download class="h-5 w-5" />
-                            Archivos adjuntos
-                        </h3>
-                        <div class="space-y-3">
-                            <!-- Archivo principal si no es imagen/video -->
-                            <div v-if="imageUrl && imageType !== 'image' && imageType !== 'video'" class="flex items-center gap-3 p-3 bg-muted rounded-lg">
-                                <div class="flex-shrink-0">
-                                    <Image v-if="imageType === 'image'" class="h-6 w-6 text-blue-500" />
-                                    <Video v-else-if="imageType === 'video'" class="h-6 w-6 text-purple-500" />
-                                    <FileText v-else class="h-6 w-6 text-gray-500" />
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <p class="text-sm font-medium text-foreground truncate">Archivo principal</p>
-                                    <p class="text-xs text-muted-foreground">{{ imageType || 'documento' }}</p>
-                                </div>
-                                <a 
-                                    :href="imageUrl" 
-                                    target="_blank"
-                                    class="flex-shrink-0 inline-flex items-center px-3 py-1 text-xs font-medium bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
-                                >
-                                    Ver
-                                </a>
-                            </div>
-
-                            <!-- Archivo adicional -->
-                            <div v-if="fileUrl" class="flex items-center gap-3 p-3 bg-muted rounded-lg">
-                                <div class="flex-shrink-0">
-                                    <Image v-if="fileType === 'image'" class="h-6 w-6 text-blue-500" />
-                                    <Video v-else-if="fileType === 'video'" class="h-6 w-6 text-purple-500" />
-                                    <FileText v-else class="h-6 w-6 text-gray-500" />
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <p class="text-sm font-medium text-foreground truncate">Archivo adjunto</p>
-                                    <p class="text-xs text-muted-foreground">{{ fileType || 'documento' }}</p>
-                                </div>
-                                <a 
-                                    :href="fileUrl" 
-                                    target="_blank"
-                                    class="flex-shrink-0 inline-flex items-center px-3 py-1 text-xs font-medium bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
-                                >
-                                    Ver
-                                </a>
-                            </div>
-
-                            <!-- Galería de archivos adicionales si hay video en file_url -->
-                            <div v-if="fileUrl && fileType === 'video'" class="mt-4">
-                                <h4 class="text-sm font-medium text-foreground mb-2">Video adjunto</h4>
-                                <div class="bg-muted rounded-lg overflow-hidden">
-                                    <video 
-                                        :src="fileUrl" 
-                                        controls
-                                        class="w-full h-auto max-h-48"
-                                        preload="metadata"
-                                    >
-                                        Tu navegador no soporta el elemento de video.
-                                    </video>
-                                </div>
-                            </div>
-
-                            <!-- Imagen adicional si hay imagen en file_url -->
-                            <div v-if="fileUrl && fileType === 'image'" class="mt-4">
-                                <h4 class="text-sm font-medium text-foreground mb-2">Imagen adjunta</h4>
-                                <div class="bg-muted rounded-lg overflow-hidden">
-                                    <div class="relative">
-                                        <!-- Imagen adjunta real -->
-                                        <img 
-                                            v-if="!fileImageLoadError"
-                                            :src="fileUrl" 
-                                            :alt="'Imagen adjunta de ' + post.title"
-                                            class="w-full h-auto max-h-48 object-cover"
-                                            loading="lazy"
-                                            @error="handleFileImageError"
-                                        />
-                                        
-                                        <!-- Placeholder para imagen adjunta -->
-                                        <div 
-                                            v-if="fileImageLoadError" 
-                                            class="w-full h-48 flex items-center justify-center bg-gray-100 dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-600"
-                                        >
-                                            <div class="text-center text-gray-500 dark:text-gray-400">
-                                                <Image class="h-12 w-12 mx-auto mb-2 opacity-50" />
-                                                <p class="text-sm font-medium mb-1">Imagen no disponible</p>
-                                                <p class="text-xs opacity-75">Error al cargar imagen adjunta</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <AttachedFiles 
+                        :imageUrl="post.image_path ? `/storage/${post.image_path}` : null"
+                        :fileUrl="post.file_path ? `/storage/${post.file_path}` : null"
+                        :title="post.title"
+                    />
 
                     <!-- Acciones -->
                     <div class="bg-card rounded-lg p-6 shadow-sm border border-border">
@@ -426,9 +339,9 @@ const fileUrl = computed(() => {
         <!-- Componente Modal de eliminación -->
         <Delete 
             :post="post"
-            :open="showDeleteModal"
+            :isOpen="showDeleteModal"
             @confirm="handleDeleteConfirm"
-            @cancel="() => showDeleteModal = false"
+            @update:isOpen="(value) => showDeleteModal = value"
         />
     </AppLayout>
 </template>
