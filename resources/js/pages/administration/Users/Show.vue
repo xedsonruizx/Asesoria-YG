@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
-import { ArrowLeft, Calendar, User, Mail, Shield, Crown, Trash2, Edit } from 'lucide-vue-next';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { ArrowLeft, Calendar, User, Mail, Shield, Crown, Trash2, Edit, AlertTriangle, X } from 'lucide-vue-next';
 import users from '@/routes/users';
 import { route } from 'ziggy-js';
 
@@ -28,6 +28,7 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const page = usePage();
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -85,23 +86,61 @@ const getVerificationColor = (emailVerifiedAt?: string) => {
 
 // Estado para el modal
 const showDeleteModal = ref(false);
+const isDeleting = ref(false);
+
+// Verificar si el usuario a eliminar es el usuario actual
+const isCurrentUser = computed(() => {
+  return page.props.auth?.user?.id === props.user.id;
+});
 
 // Funciones para las acciones
 const confirmDelete = () => {
     showDeleteModal.value = true;
 };
 
-const handleDeleteConfirm = (userId: number) => {
-    router.delete(`/users/${userId}`, {
-        onSuccess: () => {
-            console.log('Usuario eliminado exitosamente');
-        },
-        onError: (errors) => {
-            console.error('Error al eliminar el usuario:', errors);
-            alert('Error al eliminar el usuario. Inténtalo de nuevo.');
-        }
-    });
+const closeModal = () => {
+  showDeleteModal.value = false;
 };
+
+const handleDeleteConfirm = async () => {
+    if (isCurrentUser.value) {
+        return; // No permitir eliminación del usuario actual
+    }
+    
+    isDeleting.value = true;
+    try {
+        router.delete(`/users/${props.user.id}`, {
+            onSuccess: () => {
+                console.log('Usuario eliminado exitosamente');
+                showDeleteModal.value = false;
+            },
+            onError: (errors) => {
+                console.error('Error al eliminar el usuario:', errors);
+                alert('Error al eliminar el usuario. Inténtalo de nuevo.');
+            },
+            onFinish: () => {
+                isDeleting.value = false;
+            }
+        });
+    } catch (error) {
+        isDeleting.value = false;
+    }
+};
+
+// Manejar tecla Escape
+const handleKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape' && showDeleteModal.value) {
+    closeModal();
+  }
+};
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown);
+});
 </script>
 
 <template>
@@ -272,7 +311,7 @@ const handleDeleteConfirm = (userId: number) => {
                                 <Edit class="h-4 w-4" />
                                 Editar usuario
                             </button>
-                            <button 
+                            <button  
                                 @click="confirmDelete"
                                 class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 transition-colors"
                             >
@@ -284,5 +323,106 @@ const handleDeleteConfirm = (userId: number) => {
                 </div>
             </div>
         </div>
+        
+        <!-- Modal de confirmación de eliminación -->
+        <Teleport to="body">
+            <Transition
+                enter-active-class="transition-opacity duration-300"
+                enter-from-class="opacity-0"
+                enter-to-class="opacity-100"
+                leave-active-class="transition-opacity duration-300"
+                leave-from-class="opacity-100"
+                leave-to-class="opacity-0"
+            >
+                <div 
+                    v-if="showDeleteModal"
+                    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm"
+                    @click="closeModal"
+                >
+                    <!-- Contenido del modal -->
+                    <Transition
+                        enter-active-class="transition-all duration-300"
+                        enter-from-class="opacity-0 scale-95 translate-y-4"
+                        enter-to-class="opacity-100 scale-100 translate-y-0"
+                        leave-active-class="transition-all duration-300"
+                        leave-from-class="opacity-100 scale-100 translate-y-0"
+                        leave-to-class="opacity-0 scale-95 translate-y-4"
+                    >
+                        <div 
+                            v-if="showDeleteModal"
+                            class="relative w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+                            @click.stop
+                        >
+                            <!-- Header -->
+                            <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                                <div class="flex items-center gap-3">
+                                    <div class="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center" :class="isCurrentUser ? 'bg-yellow-100 dark:bg-yellow-900' : 'bg-red-100 dark:bg-red-900'">
+                                        <AlertTriangle v-if="isCurrentUser" class="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
+                                        <Trash2 v-else class="h-6 w-6 text-red-600 dark:text-red-400" />
+                                    </div>
+                                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                                        {{ isCurrentUser ? 'Acción no permitida' : 'Confirmar eliminación' }}
+                                    </h3>
+                                </div>
+                                <button 
+                                    @click="closeModal"
+                                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                                >
+                                    <X class="h-5 w-5" />
+                                </button>
+                            </div>
+
+                            <!-- Contenido -->
+                            <div class="p-6">
+                                <p class="text-gray-600 dark:text-gray-300 mb-4">
+                                    <span v-if="isCurrentUser">
+                                        No puedes eliminar tu propia cuenta desde esta sección.
+                                    </span>
+                                    <span v-else>
+                                        ¿Estás seguro de que quieres eliminar este usuario?
+                                    </span>
+                                </p>
+                                
+                                <div class="rounded-md p-4 border-l-4 mb-6" :class="isCurrentUser ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400' : 'bg-red-50 dark:bg-red-900/20 border-red-400'">
+                                    <p class="font-medium text-gray-900 dark:text-white mb-2">
+                                        "{{ user.name }}" ({{ user.email }})
+                                    </p>
+                                    <p class="text-sm" :class="isCurrentUser ? 'text-yellow-700 dark:text-yellow-300' : 'text-red-700 dark:text-red-300'">
+                                        <strong v-if="isCurrentUser">Información:</strong>
+                                        <strong v-else>Advertencia:</strong>
+                                        <span v-if="isCurrentUser">
+                                            Esta es tu cuenta actual. Para eliminar tu cuenta, ve a la sección de configuración de perfil.
+                                        </span>
+                                        <span v-else>
+                                            Esta acción no se puede deshacer. Todos los datos asociados a este usuario se perderán definitivamente.
+                                        </span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Footer -->
+                            <div class="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+                                <button 
+                                    @click="closeModal"
+                                    class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                                >
+                                    {{ isCurrentUser ? 'Entendido' : 'Cancelar' }}
+                                </button>
+                                <button 
+                                    v-if="!isCurrentUser"
+                                    @click="handleDeleteConfirm"
+                                    :disabled="isDeleting"
+                                    class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-red-400 rounded-md transition-colors"
+                                >
+                                    <Trash2 class="h-4 w-4" />
+                                    <span v-if="isDeleting">Eliminando...</span>
+                                    <span v-else>Eliminar usuario</span>
+                                </button>
+                            </div>
+                        </div>
+                    </Transition>
+                </div>
+            </Transition>
+        </Teleport>
     </AppLayout>
 </template>

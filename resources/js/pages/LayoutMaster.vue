@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
 import TopBar from '@/components/MyComponents/TopBar.vue';
+import WhatsAppButton from '@/components/MyComponents/WhatsAppButton.vue';
 import { Link } from '@inertiajs/vue3';
 import { register, publicaciones } from '@/routes';
 import Landing from '@/pages/ClientMenu/Lading.vue';
@@ -26,9 +27,6 @@ const companyName = import.meta.env.VITE_COMPANY_NAME || 'Asesorías YG';
         <Services/>
         <Rate/>
         <Contact/>
-
-
-      
 
         <!-- FOOTER -->
         <footer class="bg-gray-900 text-white py-12">
@@ -86,4 +84,7 @@ const companyName = import.meta.env.VITE_COMPANY_NAME || 'Asesorías YG';
             </div>
         </footer>
     </div>
+
+    <!-- Botón flotante de WhatsApp -->
+    <WhatsAppButton />
 </template>

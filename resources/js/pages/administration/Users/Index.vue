@@ -1,12 +1,13 @@
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import { Head, router } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Button } from '@/components/ui/button';
 import { Plus, Edit, Trash2, Users, ChevronLeft, ChevronRight, Crown } from 'lucide-vue-next';
 import users from '@/routes/users';
 import { type BreadcrumbItem } from '@/types';
+import Delete from './Delete.vue';
 
 // Props del backend
 interface User {
@@ -33,6 +34,13 @@ const props = withDefaults(defineProps<{
 }>(), {
   users: () => ({ data: [], current_page: 1, last_page: 1, per_page: 10, total: 0, from: 0, to: 0 })
 });
+
+// Obtener la página actual de Inertia
+const page = usePage();
+
+// Estado para el modal de eliminación
+const showDeleteModal = ref(false);
+const userToDelete = ref<User | null>(null);
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -62,7 +70,44 @@ const viewUser = (user: User) => {
   router.visit(users.show(user.id).url);
 };
 
+// Verificar si un usuario es el usuario actual
+const isCurrentUser = (userId: number) => {
+  return page.props.auth?.user?.id === userId;
+};
+
+// Función para abrir el modal de eliminación
+const confirmDelete = (user: User) => {
+  userToDelete.value = user;
+  showDeleteModal.value = true;
+};
+
+// Función para cerrar el modal
+const closeDeleteModal = () => {
+  showDeleteModal.value = false;
+  userToDelete.value = null;
+};
+
+// Función para manejar la confirmación de eliminación
+const handleDeleteConfirm = (userId: number) => {
+  router.delete(users.destroy(userId).url, {
+    onSuccess: () => {
+      console.log('Usuario eliminado exitosamente');
+      closeDeleteModal();
+    },
+    onError: (errors) => {
+      console.error('Error al eliminar el usuario:', errors);
+      alert('Error al eliminar el usuario. Inténtalo de nuevo.');
+    }
+  });
+};
+
 const deleteUser = (id: number) => {
+  // Verificar si es el usuario actual
+  if (isCurrentUser(id)) {
+    alert('No puedes eliminar tu propia cuenta desde esta sección.');
+    return;
+  }
+  
   if (confirm('¿Estás seguro de que quieres eliminar este usuario?')) {
     router.delete(users.destroy(id).url);
   }
@@ -232,9 +277,9 @@ const truncateEmail = (email: string, maxLength: number = 30) => {
                     <!-- Encabezados -->
                     <div class="bg-muted/30 p-4 border-b border-border">
                         <div class="grid grid-cols-1 md:grid-cols-6 gap-4 font-semibold text-foreground">
-                            <div class="md:col-span-1">ID</div>
+                            <!-- <div class="md:col-span-1">ID</div> -->
                             <div class="md:col-span-1">Nombre</div>
-                            <div class="md:col-span-1">Email</div>
+                            <div class="md:col-span-2">Email</div>
                             <div class="hidden md:block">Premium</div>
                             <div class="hidden md:block">Fecha de Registro</div>
                             <div class="hidden md:block">Acciones</div>
@@ -248,11 +293,11 @@ const truncateEmail = (email: string, maxLength: number = 30) => {
                             :key="user.id"
                             class="border-b border-border p-4 hover:bg-muted/50 transition-colors group"
                         >
-                            <div class="grid grid-cols-1 md:grid-cols-6 gap-4 items-start md:items-center">
+                            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-start md:items-center">
                                 <!-- ID -->
-                                <div class="md:col-span-1">
+                                <!-- <div class="md:col-span-1">
                                     <div class="font-semibold text-foreground">#{{ user.id }}</div>
-                                </div>
+                                </div> -->
                                 
                                 <!-- Nombre -->
                                 <div class="md:col-span-1 cursor-pointer" @click="viewUser(user)">
@@ -309,7 +354,13 @@ const truncateEmail = (email: string, maxLength: number = 30) => {
                                     <Button @click="editUser(user.id)" variant="outline" size="sm">
                                         <Edit class="w-4 h-4" />
                                     </Button>
-                                    <Button @click="deleteUser(user.id)" variant="destructive" size="sm">
+                                    <Button 
+                                        @click="confirmDelete(user)" 
+                                        :variant="isCurrentUser(user.id) ? 'outline' : 'destructive'" 
+                                        :disabled="isCurrentUser(user.id)"
+                                        size="sm"
+                                        :class="isCurrentUser(user.id) ? 'opacity-50 cursor-not-allowed' : ''"
+                                    >
                                         <Trash2 class="w-4 h-4" />
                                     </Button>
                                 </div>
@@ -327,7 +378,13 @@ const truncateEmail = (email: string, maxLength: number = 30) => {
                                             <Edit class="h-4 w-4" />
                                             Editar
                                         </Button>
-                                        <Button @click="deleteUser(user.id)" variant="destructive" size="sm">
+                                        <Button 
+                                            @click="confirmDelete(user)" 
+                                            :variant="isCurrentUser(user.id) ? 'outline' : 'destructive'" 
+                                            :disabled="isCurrentUser(user.id)"
+                                            size="sm"
+                                            :class="isCurrentUser(user.id) ? 'opacity-50 cursor-not-allowed' : ''"
+                                        >
                                             <Trash2 class="w-4 h-4" />
                                         </Button>
                                     </div>
@@ -345,5 +402,14 @@ const truncateEmail = (email: string, maxLength: number = 30) => {
                 </div>
             </div>
         </div>
+        
+        <!-- Modal de eliminación -->
+        <Delete 
+            v-if="userToDelete"
+            :user="userToDelete"
+            :isOpen="showDeleteModal"
+            @confirm="handleDeleteConfirm"
+            @update:isOpen="(value) => showDeleteModal = value"
+        />
     </AppLayout>
 </template>
