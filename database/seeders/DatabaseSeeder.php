@@ -20,9 +20,11 @@ class DatabaseSeeder extends Seeder
         
         $this->call([
             UserSeeder::class,
-            RolePermissionSeeder::class, // Agregar esta línea
+            RolePermissionSeeder::class,
             TagCategorySeeder::class,
             PostSeeder::class,
+            EvaluationCategorySeeder::class,
+            EvaluationQuestionSeeder::class, // Agregar esta línea
         ]);
     }
 }

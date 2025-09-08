@@ -15,8 +15,8 @@ class UserSeeder extends Seeder
      */
     public function run(): void
     {
-        // Limpiar la tabla antes de insertar
-        DB::table('users')->truncate();
+        // Usar delete en lugar de truncate para evitar problemas con foreign keys
+        DB::table('users')->delete();
 
         // Crear usuario administrador usando DB::table directamente
         DB::table('users')->insert([

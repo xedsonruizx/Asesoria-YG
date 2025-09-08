@@ -48,4 +48,20 @@ class User extends Authenticatable
             'ispremium' => 'boolean',
         ];
     }
+
+    /**
+     * Get the evaluations for the user.
+     */
+    public function evaluations()
+    {
+        return $this->hasMany(Evaluation::class);
+    }
+
+    public function getEvaluationProgress()
+    {
+        return $this->evaluations()
+            ->where('status', 'completed')
+            ->orderBy('completed_at')
+            ->get(['total_score', 'completed_at', 'category_scores']);
+    }
 }

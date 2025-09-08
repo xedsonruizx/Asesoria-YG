@@ -6,13 +6,14 @@ use App\Http\Controllers\PostController;
 use App\Http\Controllers\TagCategoryController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\EvaluationController;
+use App\Http\Controllers\EvaluationAdminController;
 
 // ============================================
 // RUTAS PÚBLICAS (SIN AUTENTICACIÓN)
 // ============================================
 Route::redirect('/', '/inicio');
 Route::get('/inicio', function () {return Inertia::render('LayoutMaster');})-> name('inicio');
-Route::get('evaluacion', function () {return Inertia::render('ClientMenu/Evaluation');})-> name('evaluacion');
 Route::get('publicaciones', [PostController::class, 'index'])->name('publicaciones');
 Route::get('publicacion/{post}', [PostController::class, 'clientShow'])->name('publicacion.show');
 
@@ -20,12 +21,18 @@ Route::get('publicacion/{post}', [PostController::class, 'clientShow'])->name('p
 // RUTAS PARA USUARIOS AUTENTICADOS
 // ============================================
 Route::middleware(['auth'])->group(function () {
+    // Ruta de evaluación que requiere autenticación
+    Route::get('evaluacion', [EvaluationController::class, 'index'])->name('evaluacion');
+    
+    // Rutas de API para evaluaciones
+    Route::post('/evaluation/answer', [EvaluationController::class, 'saveAnswer'])->name('evaluation.answer');
+    Route::post('/evaluation/submit', [EvaluationController::class, 'submit'])->name('evaluation.submit');
+    Route::post('/evaluation/restart', [EvaluationController::class, 'restart'])->name('evaluation.restart');
+    Route::get('/evaluation/{evaluation}/report', [EvaluationController::class, 'report'])->name('evaluation.report');
+    
     // Rutas que requieren permiso 'manage'
     Route::middleware(['permission:manage'])->group(function () {
-
-        Route::get('dashboard', function () {return Inertia::render('administration/Dashboard');})->name('dashboard');
-
-        // Resource completo para posts (incluye create, store, edit, etc.)
+        Route::get('dashboard', function () {return Inertia::render('administration/Dashboard');})-> name('dashboard');
         Route::resource('posts', PostController::class);
         Route::resource('users', UserController::class);
 
@@ -41,15 +48,24 @@ Route::middleware(['auth'])->group(function () {
         // Resource para tags
         Route::resource('tags', TagCategoryController::class);
         Route::get('api/tags', [TagCategoryController::class, 'apiIndex'])->name('api.tags.index');
+
+        // Rutas administrativas para evaluaciones
+        Route::resource('evaluations', EvaluationAdminController::class)->names([
+            'index' => 'admin.evaluations.index',
+            'create' => 'admin.evaluations.create',
+            'store' => 'admin.evaluations.store',
+            'show' => 'admin.evaluations.show',
+            'edit' => 'admin.evaluations.edit',
+            'update' => 'admin.evaluations.update',
+            'destroy' => 'admin.evaluations.destroy'
+        ]);
+        Route::post('evaluations/{evaluation}/reset', [EvaluationAdminController::class, 'reset'])->name('admin.evaluations.reset');
     });
     
     // Rutas que requieren permiso 'guest' (solo ver)
     Route::middleware(['permission:guest'])->group(function () {
         // Rutas de solo lectura si las necesitas
     });
-
-
-
 });
 
 require __DIR__.'/settings.php';

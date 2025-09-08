@@ -1,373 +1,342 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { Head } from '@inertiajs/vue3';
-import TopBar from '@/components/MyComponents/TopBar.vue';
 import Button from '@/components/ui/button/Button.vue';
 import Card from '@/components/ui/card/Card.vue';
-import RRHHSection from '@/components/MyComponents/Evaluacion/RRHHSection.vue';
-import LegalSection from '@/components/MyComponents/Evaluacion/LegalSection.vue';
-import { useEvaluationPersistence } from '@/composables/useEvaluationPersistence';
+import TopBar from '@/components/MyComponents/TopBar.vue';
+import QuestionInput from '@/components/QuestionInput.vue';
+import EvaluationResults from '@/components/EvaluationResults.vue';
+import { router } from '@inertiajs/vue3';
+import axios from 'axios';
 
-// Estado global de la evaluación
-const answers = ref<Record<number, any>>({});
-const showResults = ref(false);
-const isSubmitting = ref(false);
-
-// Composable de persistencia
-const { loadAnswersFromStorage, clearStoredAnswers, setupAutoSave } = useEvaluationPersistence();
-
-// Cargar datos guardados al inicializar
-onMounted(() => {
-    const stored = loadAnswersFromStorage();
-    answers.value = stored.answers;
-    showResults.value = stored.showResults;
-    
-    // Configurar guardado automático
-    setupAutoSave(answers, showResults);
-});
-
-// IDs de preguntas por categoría para cálculos
-const rrhhQuestionIds = [1, 2, 3, 4, 5, 6, 7, 15, 16];
-const legalQuestionIds = [8, 9, 10, 11, 12, 13, 14];
-
-// Computed para progreso total
-const totalProgress = computed(() => {
-    const totalQuestions = rrhhQuestionIds.length + legalQuestionIds.length;
-    const answeredQuestions = [...rrhhQuestionIds, ...legalQuestionIds].filter(id => 
-        answers.value[id] !== undefined && answers.value[id] !== ''
-    ).length;
-    return totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
-});
-
-// Computed para puntaje total
-const totalScore = computed(() => {
-    // Definición de puntos por pregunta
-    const questionPoints: Record<number, number> = {
-        // RRHH
-        1: 25, 2: 15, 3: 5, 4: 20, 5: 8, 6: 12, 7: 6, 15: 10, 16: 8,
-        // LEGAL
-        8: 15, 9: 10, 10: 8, 11: 18, 12: 12, 13: 20, 14: 15
+interface Question {
+    id: number;
+    question_text: string;
+    category_id: number;
+    question_type: 'text' | 'textarea' | 'select' | 'number' | 'checkbox' | 'yes_no';
+    options?: string[];
+    placeholder?: string;
+    min_value?: number;
+    max_value?: number;
+    points: number;
+    show_condition?: {
+        questionId: number;
+        answer: any;
     };
+    order: number;
+    is_active: boolean;
+    is_required: boolean;
+}
+
+interface Category {
+    id: number;
+    name: string;
+    description?: string;
+    slug: string;
+}
+
+interface CategoryScore {
+    category: string;
+    score: number;
+    maxScore: number;
+    progress: number;
+}
+
+interface Evaluation {
+    id: number;
+    user_id: number;
+    total_score: number;
+    total_progress: number;
+    is_completed: boolean;
+    completed_at?: string;
+    category_scores: Record<string, CategoryScore>;
+}
+
+interface Props {
+    evaluation: Evaluation;
+    questions: Question[];
+    answers: Record<number, any>;
+    categories: Category[];
+    showResults?: boolean;
+    report?: any;
+    categoryScores?: Record<string, CategoryScore>; // Agregar esta prop
+}
+
+const props = defineProps<Props>();
+
+// Estado reactivo
+const answers = ref<Record<number, any>>(props.answers || {});
+const showResults = ref<boolean>(props.showResults || props.evaluation?.is_completed || false);
+const isSubmitting = ref<boolean>(false);
+const notification = ref<{ type: string; message: string }>({ type: '', message: '' });
+
+// Computed para puntajes por categoría
+const categoryScores = computed(() => {
+    // Si tenemos categoryScores desde el backend (resultados completados), usarlos
+    if (props.categoryScores && Object.keys(props.categoryScores).length > 0) {
+        return props.categoryScores;
+    }
     
-    return Object.entries(answers.value).reduce((total, [questionId, answer]) => {
-        const id = parseInt(questionId);
-        const points = questionPoints[id] || 0;
+    // Si no, calcular basándose en las preguntas visibles (evaluación en progreso)
+    const scores: Record<string, CategoryScore> = {};
+    
+    visibleQuestionsByCategory.value.forEach(category => {
+        const categoryQuestions = category.questions;
+        const maxScore = categoryQuestions.reduce((sum, q) => sum + q.points, 0);
+        const currentScore = categoryQuestions.reduce((sum, q) => {
+            const answer = answers.value[q.id];
+            if (answer !== undefined && answer !== '' && answer !== null) {
+                if (q.question_type === 'yes_no') {
+                    return sum + (answer === true ? q.points : 0);
+                } else if (q.question_type === 'checkbox' && Array.isArray(answer)) {
+                    return sum + (answer.length > 0 ? q.points : 0);
+                } else {
+                    return sum + q.points;
+                }
+            }
+            return sum;
+        }, 0);
         
-        if (answer !== undefined && answer !== '') {
-            // Para preguntas yes_no
-            if ([1, 2, 3, 4, 6, 8, 9, 10, 11, 13, 14].includes(id)) {
-                return total + (answer === true ? points : 0);
-            }
-            // Para checkboxes
-            else if (id === 12) {
-                return total + (Array.isArray(answer) && answer.length > 0 ? points : 0);
-            }
-            // Para otros tipos (text, textarea, select, number)
-            else {
-                return total + points;
-            }
-        }
-        return total;
-    }, 0);
+        const answeredQuestions = categoryQuestions.filter(q => {
+            const answer = answers.value[q.id];
+            return answer !== undefined && answer !== '' && answer !== null;
+        }).length;
+        
+        const progress = categoryQuestions.length > 0 ? Math.round((answeredQuestions / categoryQuestions.length) * 100) : 0;
+        
+        scores[category.name] = {
+            category: category.name,
+            score: currentScore,
+            maxScore,
+            progress
+        };
+    });
+    
+    return scores;
+});
+const totalScore = computed(() => {
+    return Object.values(categoryScores.value).reduce((sum, cat) => sum + cat.score, 0);
 });
 
-// Computed para validación del formulario
-const canSubmit = computed(() => {
-    return totalProgress.value >= 10; // Al menos 80% completado
+const isValidForSubmission = computed(() => {
+    return Object.values(categoryScores.value).every(cat => cat.progress >= 20);
 });
 
-// Computed para color del progreso total
-const totalProgressColor = computed(() => {
-    if (totalProgress.value >= 80) return 'bg-green-500';
-    if (totalProgress.value >= 50) return 'bg-yellow-500';
-    return 'bg-red-500';
-});
-
-// Computed para mensaje de resultado total
-const totalResultMessage = computed(() => {
-    const percentage = totalProgress.value;
-    if (percentage >= 90) return 'Excelente situación laboral general';
-    if (percentage >= 70) return 'Buena situación laboral general';
-    if (percentage >= 50) return 'Situación laboral regular';
-    return 'Necesita mejorar significativamente su situación laboral';
-});
-
-// Función para manejar cambios en las respuestas
-const handleAnswerChange = (questionId: number, value: any) => {
-    // Los componentes hijos ya manejan la lógica de dependencias
-    // Solo necesitamos actualizar el estado global
+// Funciones
+const showNotification = (type: string, message: string) => {
+    notification.value = { type, message };
+    setTimeout(() => {
+        notification.value = { type: '', message: '' };
+    }, 3000);
 };
 
-// Función para actualizar respuestas desde componentes hijos
-const updateAnswers = (newAnswers: Record<number, any>) => {
-    answers.value = newAnswers;
-};
-
-// Función para enviar evaluación
+// Modificar la función submitEvaluation para no redirigir
 const submitEvaluation = async () => {
-    if (!canSubmit.value) {
-        alert('Por favor complete al menos el 80% de la evaluación antes de enviar.');
+    if (!isValidForSubmission.value) {
+        showNotification('error', 'Debe completar al menos el 80% de cada sección para enviar la evaluación.');
         return;
     }
     
     isSubmitting.value = true;
     
     try {
-        // Simular envío al servidor
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Enviar solo las respuestas, el controlador obtendrá la evaluación del usuario autenticado
+        const response = await axios.post('/evaluation/submit', {
+            answers: answers.value
+        });
         
-        showResults.value = true;
-        
-        // Limpiar localStorage después del envío exitoso
-        clearStoredAnswers();
-        
-        alert('Evaluación enviada exitosamente');
+        if (response.data.success) {
+            // Actualizar el estado local con los datos del servidor
+            evaluation.value = response.data.evaluation;
+            
+            // Mostrar resultados
+            showResults.value = true;
+            showNotification('success', '¡Evaluación completada exitosamente!');
+        }
     } catch (error) {
         console.error('Error al enviar evaluación:', error);
-        alert('Error al enviar la evaluación. Por favor intente nuevamente.');
+        showNotification('error', 'Error al enviar la evaluación. Inténtelo nuevamente.');
     } finally {
         isSubmitting.value = false;
     }
 };
 
-// Función para reiniciar evaluación
-const restartEvaluation = () => {
-    answers.value = {};
-    showResults.value = false;
-    isSubmitting.value = false;
-    clearStoredAnswers();
+const restartEvaluation = async () => {
+    try {
+        await axios.post('/evaluation/restart', {
+            evaluation_id: evaluation.value.id
+        });
+        
+        // Resetear estado local
+        answers.value = {};
+        showResults.value = false;
+        evaluation.value.is_completed = false;
+        evaluation.value.completed_at = undefined;
+        
+        showNotification('success', 'Evaluación reiniciada correctamente.');
+    } catch (error) {
+        showNotification('error', 'Error al reiniciar la evaluación.');
+    }
 };
-// Computed para progreso de RRHH
-const rrhhProgress = computed(() => {
-    const rrhhQuestions = [1, 2, 3, 4, 5, 6, 7, 15, 16];
-    const answeredRRHH = rrhhQuestions.filter(id => 
-        answers.value[id] !== undefined && answers.value[id] !== ''
-    ).length;
-    return Math.round((answeredRRHH / rrhhQuestions.length) * 100);
-});
 
-// Computed para progreso de Legal
-const legalProgress = computed(() => {
-    const legalQuestions = [8, 9, 10, 11, 12, 13, 14];
-    const answeredLegal = legalQuestions.filter(id => 
-        answers.value[id] !== undefined && answers.value[id] !== ''
-    ).length;
-    return Math.round((answeredLegal / legalQuestions.length) * 100);
-});
+const getProgressColor = (progress: number) => {
+    if (progress >= 80) return 'text-green-600';
+    if (progress >= 50) return 'text-yellow-600';
+    return 'text-red-600';
+};
 
-// Computed para total de preguntas respondidas
-const totalAnsweredQuestions = computed(() => {
-    return Object.keys(answers.value).filter(key => 
-        answers.value[parseInt(key)] !== undefined && answers.value[parseInt(key)] !== ''
-    ).length;
-});
+const getScoreMessage = (score: number, category: string) => {
+    const categoryData = categoryScores.value[category];
+    if (!categoryData) return '';
+    
+    const percentage = categoryData.progress;
+    
+    if (percentage >= 80) return `Excelente conocimiento en ${category}`;
+    if (percentage >= 60) return `Buen conocimiento en ${category}`;
+    if (percentage >= 40) return `Conocimiento regular en ${category}`;
+    return `Necesita mejorar en ${category}`;
+};
+
+const getCircularProgress = (progress: number) => {
+    const circumference = 2 * Math.PI * 45;
+    const strokeDasharray = circumference;
+    const strokeDashoffset = circumference - (progress / 100) * circumference;
+    return { strokeDasharray, strokeDashoffset };
+};
+
+// Función para manejar el reinicio de la evaluación
+const handleRestart = () => {
+    restartEvaluation();
+}
+
+// Función para manejar la solicitud de consulta
+const handleRequestConsultation = () => {
+    // Aquí puedes agregar la lógica para redirigir a la página de contacto
+    // o abrir un modal de contacto
+    console.log('Solicitar consulta profesional');
+}
+
+
+
 </script>
 
 <template>
     <Head title="Evaluación Laboral" />
     
-    <div class="min-h-screen bg-[#FDFDFC] text-[#1b1b18] dark:bg-[#0a0a0a] dark:text-[#EDEDEC]">
-        <TopBar />
-        
-        <div class="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-            <!-- Encabezado principal -->
-            <div v-if="!showResults" class="text-center mb-8">
-                <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-                    Evaluación de Situación Laboral
-                </h1>
-                <p class="text-lg text-gray-600 dark:text-gray-300 mb-6">
-                    Complete esta evaluación para conocer su situación laboral actual
-                </p>
-                
-                <!-- Progreso total -->
-                <Card class="p-6 mb-8">
-                    <div class="mb-4">
-                        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">Progreso General</h2>
-                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-4">
+    <TopBar />
+    
+    <!-- Notificación nativa -->
+    <div 
+        v-if="notification.type" 
+        class="fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all duration-300"
+        :class="{
+            'bg-green-500 text-white': notification.type === 'success',
+            'bg-red-500 text-white': notification.type === 'error'
+        }"
+    >
+        {{ notification.message }}
+    </div>
+    
+    <!-- Mostrar resultados si la evaluación está completada -->
+    <EvaluationResults
+        v-if="showResults"
+        :rh-score="Math.round((categoryScores['Recursos Humanos']?.progress || 0))"
+        :legal-score="Math.round((categoryScores['Legal']?.progress || 0))"
+        :total-questions="Object.values(answers).length"
+        @restart="handleRestart"
+        @request-consultation="handleRequestConsultation"
+    />
+    
+    <!-- Formulario de evaluación si no está completada -->
+    <div v-else class="min-h-screen bg-gray-50 py-8 dark:bg-gray-900">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <!-- Progreso general -->
+            <Card class="mb-8 p-6">
+                <div class="text-center">
+                    <h1 class="text-3xl font-bold text-gray-900 mb-4 dark:text-white">Evaluación Laboral</h1>
+                    <div class="w-full bg-gray-200 rounded-full h-4 mb-4 dark:bg-gray-700">
+                        <div 
+                            class="bg-blue-600 h-4 rounded-full transition-all duration-300" 
+                            :style="{ width: progress + '%' }"
+                        ></div>
+                    </div>
+                    <p class="text-lg font-medium" :class="getProgressColor(progress)">
+                        Progreso: {{ progress }}%
+                    </p>
+                </div>
+            </Card>
+
+            <!-- Secciones de preguntas dinámicas -->
+            <div class="space-y-8">
+                <Card v-for="category in visibleQuestionsByCategory" :key="category.id" class="p-6">
+                    <div class="mb-6">
+                        <h2 class="text-2xl font-bold text-gray-900 mb-2 dark:text-white">{{ category.name }}</h2>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5 mb-4">
                             <div 
-                                :class="totalProgressColor" 
-                                class="h-3 rounded-full transition-all duration-300" 
-                                :style="{ width: totalProgress + '%' }"
+                                class="h-2.5 rounded-full transition-all duration-300" 
+                                :class="{
+                                    'bg-green-500': categoryScores[category.name]?.progress >= 80,
+                                    'bg-yellow-500': categoryScores[category.name]?.progress >= 60 && categoryScores[category.name]?.progress < 80,
+                                    'bg-orange-500': categoryScores[category.name]?.progress >= 40 && categoryScores[category.name]?.progress < 60,
+                                    'bg-red-500': categoryScores[category.name]?.progress < 40
+                                }"
+                                :style="{ width: (categoryScores[category.name]?.progress || 0) + '%' }"
                             ></div>
                         </div>
                         <p class="text-sm text-gray-600 dark:text-gray-400">
-                            Progreso: {{ totalProgress }}% | Puntaje total: {{ totalScore }} puntos
+                            Progreso: {{ categoryScores[category.name]?.progress || 0 }}% 
+                            ({{ categoryScores[category.name]?.score || 0 }} puntos)
+                            <span v-if="category.questions.length > 0" class="ml-2">
+                                - {{ category.questions.filter(q => answers[q.id] !== undefined && answers[q.id] !== '').length }} de {{ category.questions.length }} preguntas respondidas
+                            </span>
+                        </p>
+                    </div>
+
+                    <div class="space-y-6">
+                        <QuestionInput
+                            v-for="question in category.questions" 
+                            :key="question.id"
+                            :question="question"
+                            v-model="answers[question.id]"
+                        />
+                    </div>
+
+                    <!-- Resultado de la sección -->
+                    <div v-if="(categoryScores[category.name]?.progress || 0) > 0" class="mt-6 p-4 rounded-lg" :class="{
+                        'bg-green-50 border border-green-200': (categoryScores[category.name]?.progress || 0) >= 80,
+                        'bg-yellow-50 border border-yellow-200': (categoryScores[category.name]?.progress || 0) >= 60 && (categoryScores[category.name]?.progress || 0) < 80,
+                        'bg-orange-50 border border-orange-200': (categoryScores[category.name]?.progress || 0) >= 40 && (categoryScores[category.name]?.progress || 0) < 60,
+                        'bg-red-50 border border-red-200': (categoryScores[category.name]?.progress || 0) < 40
+                    }">
+                        <h3 class="font-semibold" :class="{
+                            'text-green-800': (categoryScores[category.name]?.progress || 0) >= 80,
+                            'text-yellow-800': (categoryScores[category.name]?.progress || 0) >= 60 && (categoryScores[category.name]?.progress || 0) < 80,
+                            'text-orange-800': (categoryScores[category.name]?.progress || 0) >= 40 && (categoryScores[category.name]?.progress || 0) < 60,
+                            'text-red-800': (categoryScores[category.name]?.progress || 0) < 40
+                        }">
+                            {{ getScoreMessage(categoryScores[category.name]?.score || 0, category.name) }}
+                        </h3>
+                        <p class="text-sm mt-1" :class="{
+                            'text-green-600': (categoryScores[category.name]?.progress || 0) >= 80,
+                            'text-yellow-600': (categoryScores[category.name]?.progress || 0) >= 60 && (categoryScores[category.name]?.progress || 0) < 80,
+                            'text-orange-600': (categoryScores[category.name]?.progress || 0) >= 40 && (categoryScores[category.name]?.progress || 0) < 60,
+                            'text-red-600': (categoryScores[category.name]?.progress || 0) < 40
+                        }">
+                            Puntaje obtenido: {{ categoryScores[category.name]?.score || 0 }} puntos
                         </p>
                     </div>
                 </Card>
-            </div>
-            
-            <!-- Secciones modulares -->
-            <div v-if="!showResults" class="space-y-8">
-                <!-- Sección RRHH -->
-                <RRHHSection 
-                    :answers="answers"
-                    @update:answers="updateAnswers"
-                    @answer-change="handleAnswerChange"
-                />
-                
-                <!-- Sección LEGAL -->
-                <LegalSection 
-                    :answers="answers"
-                    @update:answers="updateAnswers"
-                    @answer-change="handleAnswerChange"
-                />
-            </div>
-            
-            <!-- Botones de acción -->
-            <div v-if="!showResults" class="flex justify-center space-x-4 mt-8">
-                <Button 
-                    @click="submitEvaluation"
-                    :disabled="!canSubmit || isSubmitting"
-                    class="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    <span v-if="isSubmitting">Enviando...</span>
-                    <span v-else>Enviar Evaluación</span>
-                </Button>
-            </div>
-            <!-- Resultados finales -->
-            <div v-if="showResults" class="mt-8">
-                <Card class="p-8 bg-gray-900 border-gray-700">
-                    <div class="text-center mb-8">
-                        <h2 class="text-2xl font-bold text-white mb-4">
-                            Resultados de su Evaluación
-                        </h2>
-                        
-                        <!-- Indicadores de estado -->
-                        <div class="flex justify-center items-center space-x-8 mb-8">
-                            <div class="flex items-center space-x-2">
-                                <div class="w-3 h-3 bg-red-500 rounded-full"></div>
-                                <span class="text-sm text-gray-300">Requiere atención</span>
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                                <span class="text-sm text-gray-300">Mejorable</span>
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <div class="w-3 h-3 bg-green-500 rounded-full"></div>
-                                <span class="text-sm text-gray-300">Excelente</span>
-                            </div>
-                        </div>
-                        
-                        <!-- Gráficos circulares por categoría -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-                            <!-- Recursos Humanos -->
-                            <div class="text-center">
-                                <h3 class="text-lg font-semibold text-blue-400 mb-4">Recursos Humanos</h3>
-                                <div class="relative inline-flex items-center justify-center w-32 h-32 mb-4">
-                                    <svg class="w-32 h-32 transform -rotate-90" viewBox="0 0 36 36">
-                                        <!-- Círculo de fondo -->
-                                        <path class="text-gray-700" stroke="currentColor" stroke-width="3" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                                        <!-- Círculo de progreso RRHH -->
-                                        <path 
-                                            :class="{
-                                                'text-green-500': rrhhProgress >= 80,
-                                                'text-yellow-500': rrhhProgress >= 60 && rrhhProgress < 80,
-                                                'text-red-500': rrhhProgress < 60
-                                            }"
-                                            stroke="currentColor" 
-                                            stroke-width="3" 
-                                            fill="none" 
-                                            :stroke-dasharray="`${rrhhProgress}, 100`"
-                                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                                        />
-                                    </svg>
-                                    <div class="absolute inset-0 flex items-center justify-center">
-                                        <span class="text-2xl font-bold text-white">{{ rrhhProgress }}%</span>
-                                    </div>
-                                </div>
-                                <h4 class="font-semibold mb-2" :class="{
-                                    'text-green-400': rrhhProgress >= 80,
-                                    'text-yellow-400': rrhhProgress >= 60 && rrhhProgress < 80,
-                                    'text-red-400': rrhhProgress < 60
-                                }">
-                                    {{ rrhhProgress >= 80 ? 'Excelente situación en RRHH' : rrhhProgress >= 60 ? 'Situación mejorable en RRHH' : 'Hay aspectos en RRHH que podrían mejorarse.' }}
-                                </h4>
-                                <p class="text-sm text-gray-400">
-                                    {{ rrhhProgress >= 80 ? 'Su situación en RRHH está muy bien estructurada.' : 'Hay aspectos en RRHH que podrían mejorarse.' }}
-                                </p>
-                            </div>
-                            
-                            <!-- Legal -->
-                            <div class="text-center">
-                                <h3 class="text-lg font-semibold text-purple-400 mb-4">Legal</h3>
-                                <div class="relative inline-flex items-center justify-center w-32 h-32 mb-4">
-                                    <svg class="w-32 h-32 transform -rotate-90" viewBox="0 0 36 36">
-                                        <!-- Círculo de fondo -->
-                                        <path class="text-gray-700" stroke="currentColor" stroke-width="3" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                                        <!-- Círculo de progreso Legal -->
-                                        <path 
-                                            :class="{
-                                                'text-green-500': legalProgress >= 80,
-                                                'text-yellow-500': legalProgress >= 60 && legalProgress < 80,
-                                                'text-red-500': legalProgress < 60
-                                            }"
-                                            stroke="currentColor" 
-                                            stroke-width="3" 
-                                            fill="none" 
-                                            :stroke-dasharray="`${legalProgress}, 100`"
-                                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                                        />
-                                    </svg>
-                                    <div class="absolute inset-0 flex items-center justify-center">
-                                        <span class="text-2xl font-bold text-white">{{ legalProgress }}%</span>
-                                    </div>
-                                </div>
-                                <h4 class="font-semibold mb-2" :class="{
-                                    'text-green-400': legalProgress >= 80,
-                                    'text-yellow-400': legalProgress >= 60 && legalProgress < 80,
-                                    'text-red-400': legalProgress < 60
-                                }">
-                                    {{ legalProgress >= 80 ? 'Excelente situación en LEGAL' : legalProgress >= 60 ? 'Situación mejorable en LEGAL' : 'Su situación en LEGAL está muy bien estructurada.' }}
-                                </h4>
-                                <p class="text-sm text-gray-400">
-                                    {{ legalProgress >= 80 ? 'Su situación en LEGAL está muy bien estructurada.' : 'Hay aspectos legales que podrían mejorarse.' }}
-                                </p>
-                            </div>
-                        </div>
-                        
-                        <!-- Estadísticas resumidas -->
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                            <div class="bg-gray-800 rounded-lg p-4">
-                                <div class="text-2xl font-bold text-white mb-1">{{ totalAnsweredQuestions }}</div>
-                                <div class="text-sm text-gray-400">Preguntas respondidas</div>
-                            </div>
-                            <div class="bg-gray-800 rounded-lg p-4">
-                                <div class="text-2xl font-bold text-blue-400 mb-1">{{ rrhhProgress }}%</div>
-                                <div class="text-sm text-gray-400">Puntaje RRHH</div>
-                            </div>
-                            <div class="bg-gray-800 rounded-lg p-4">
-                                <div class="text-2xl font-bold text-purple-400 mb-1">{{ legalProgress }}%</div>
-                                <div class="text-sm text-gray-400">Puntaje Legal</div>
-                            </div>
-                        </div>
-                        
-                        <!-- Botones de acción -->
-                        <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                            <Button 
-                                @click="restartEvaluation"
-                                class="px-8 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 border border-gray-600"
-                            >
-                                Realizar nueva evaluación
-                            </Button>
-                            <Button 
-                                class="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                            >
-                                Solicitar consulta profesional
-                            </Button>
-                        </div>
-                        
-                        <!-- Disclaimer -->
-                        <div class="mt-8 text-center">
-                            <p class="text-sm text-gray-400 mb-2">
-                                Esta evaluación es solo orientativa y no constituye asesoría legal profesional.
-                            </p>
-                            <p class="text-sm text-gray-400">
-                                Para obtener asesoría personalizada, contacte con nuestros especialistas.
-                            </p>
-                        </div>
-                    </div>
-                </Card>
+
+                <!-- Botones de acción -->
+                <div class="flex justify-center space-x-4">
+                    <Button 
+                        @click="submitEvaluation"
+                        :disabled="!isValidForSubmission || isSubmitting"
+                        class="px-8 py-3"
+                    >
+                        {{ isSubmitting ? 'Enviando...' : 'Completar Evaluación' }}
+                    </Button>
+                </div>
             </div>
         </div>
     </div>

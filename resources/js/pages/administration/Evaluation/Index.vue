@@ -1,0 +1,570 @@
+<script setup lang="ts">
+import { ref, computed } from 'vue';
+import { Head, router, usePage } from '@inertiajs/vue3';
+import AppLayout from '@/layouts/AppLayout.vue';
+import { Button } from '@/components/ui/button';
+import { Plus, Edit, Trash2, Eye, RotateCcw, FileText, Users, ChevronLeft, ChevronRight } from 'lucide-vue-next';
+import { type BreadcrumbItem } from '@/types';
+
+// Props del backend
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
+interface Evaluation {
+  id: number;
+  title: string;
+  description?: string;
+  status: 'draft' | 'in_progress' | 'completed';
+  total_score: number;
+  total_progress: number;
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
+  user: User;
+}
+
+interface EvaluationsData {
+  data: Evaluation[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+  from: number;
+  to: number;
+}
+
+interface Stats {
+  total: number;
+  completed: number;
+  in_progress: number;
+  draft: number;
+}
+
+const props = withDefaults(defineProps<{
+  evaluations: EvaluationsData;
+  stats: Stats;
+}>(), {
+  evaluations: () => ({ data: [], current_page: 1, last_page: 1, per_page: 10, total: 0, from: 0, to: 0 }),
+  stats: () => ({ total: 0, completed: 0, in_progress: 0, draft: 0 })
+});
+
+// Estado para el modal de eliminación
+const showDeleteModal = ref(false);
+const evaluationToDelete = ref<Evaluation | null>(null);
+
+const breadcrumbs: BreadcrumbItem[] = [
+    {
+        title: 'Evaluaciones',
+        href: '/evaluations',
+    },
+];
+
+// Funciones
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('es-ES', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+};
+
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case 'completed':
+      return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300';
+    case 'in_progress':
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300';
+    case 'draft':
+      return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
+    default:
+      return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
+  }
+};
+
+const getStatusText = (status: string) => {
+  switch (status) {
+    case 'completed':
+      return 'Completada';
+    case 'in_progress':
+      return 'En Progreso';
+    case 'draft':
+      return 'Borrador';
+    default:
+      return status;
+  }
+};
+
+const createEvaluation = () => {
+  router.visit('/evaluations/create');
+};
+
+const editEvaluation = (id: number) => {
+  router.visit(`/evaluations/${id}/edit`);
+};
+
+const viewEvaluation = (evaluation: Evaluation) => {
+  router.visit(`/evaluations/${evaluation.id}`);
+};
+
+const resetEvaluation = (id: number) => {
+  if (confirm('¿Estás seguro de que quieres reiniciar esta evaluación? Se perderán todas las respuestas.')) {
+    router.post(`/evaluations/${id}/reset`);
+  }
+};
+
+const confirmDelete = (evaluation: Evaluation) => {
+  evaluationToDelete.value = evaluation;
+  showDeleteModal.value = true;
+};
+
+const closeDeleteModal = () => {
+  showDeleteModal.value = false;
+  evaluationToDelete.value = null;
+};
+
+const handleDeleteConfirm = (evaluationId: number) => {
+  router.delete(`/evaluations/${evaluationId}`, {
+    onSuccess: () => {
+      console.log('Evaluación eliminada exitosamente');
+      closeDeleteModal();
+    },
+    onError: (errors) => {
+      console.error('Error al eliminar la evaluación:', errors);
+      alert('Error al eliminar la evaluación. Inténtalo de nuevo.');
+    }
+  });
+};
+
+// Funciones de paginación
+const goToPage = (page: number) => {
+  if (page >= 1 && page <= (props.evaluations?.last_page || 1)) {
+    router.visit('/evaluations', {
+      data: { page },
+      preserveState: true,
+      preserveScroll: true,
+    });
+  }
+};
+
+const goToPreviousPage = () => {
+  const currentPage = props.evaluations?.current_page || 1;
+  if (currentPage > 1) {
+    goToPage(currentPage - 1);
+  }
+};
+
+const goToNextPage = () => {
+  const currentPage = props.evaluations?.current_page || 1;
+  const lastPage = props.evaluations?.last_page || 1;
+  if (currentPage < lastPage) {
+    goToPage(currentPage + 1);
+  }
+};
+
+// Generar números de página para mostrar
+const getPageNumbers = () => {
+  const currentPage = props.evaluations?.current_page || 1;
+  const lastPage = props.evaluations?.last_page || 1;
+  const pages: number[] = [];
+  
+  // Verificar que tenemos datos válidos
+  if (!props.evaluations || lastPage <= 1) {
+    return pages;
+  }
+  
+  // Mostrar máximo 5 páginas
+  let startPage = Math.max(1, currentPage - 2);
+  let endPage = Math.min(lastPage, startPage + 4);
+  
+  // Ajustar si estamos cerca del final
+  if (endPage - startPage < 4) {
+    startPage = Math.max(1, endPage - 4);
+  }
+  
+  for (let i = startPage; i <= endPage; i++) {
+    pages.push(i);
+  }
+  
+  return pages;
+};
+
+const truncateText = (text: string, maxLength: number = 30) => {
+  // Verificar que text existe y es una cadena válida
+  if (!text || typeof text !== 'string') {
+    return '';
+  }
+  return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+};
+</script>
+
+<template>
+    <Head title="Evaluaciones" />
+
+    <AppLayout :breadcrumbs="breadcrumbs">
+        <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
+            <!-- Header con información de evaluaciones -->
+            <div class="bg-card rounded-lg p-6 shadow-sm border border-border">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
+                    <div class="flex-1">
+                        <h1 class="text-xl sm:text-2xl font-bold mb-2 text-foreground">Gestión de Evaluaciones</h1>
+                        <p class="text-muted-foreground text-sm sm:text-base">Administra y visualiza todas las evaluaciones del sistema</p>
+                    </div>
+                    <button 
+                        @click="createEvaluation"
+                        class="inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md transition-colors font-medium text-xs sm:text-sm w-full sm:w-auto"
+                    >
+                        <Plus class="h-4 w-4 flex-shrink-0" />
+                        <span class="truncate">Nueva Evaluación</span>
+                    </button>
+                </div>
+                
+                <!-- Estadísticas -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-muted px-3 sm:px-4 py-2 sm:py-3 rounded-md">
+                        <div class="flex items-center gap-2">
+                            <FileText class="h-4 w-4 text-blue-600" />
+                            <div>
+                                <p class="text-xs text-muted-foreground">Total</p>
+                                <p class="font-semibold text-foreground">{{ props.stats?.total || 0 }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-green-50 dark:bg-green-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md">
+                        <div class="flex items-center gap-2">
+                            <FileText class="h-4 w-4 text-green-600" />
+                            <div>
+                                <p class="text-xs text-green-700 dark:text-green-300">Completadas</p>
+                                <p class="font-semibold text-green-700 dark:text-green-300">{{ props.stats?.completed || 0 }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-blue-50 dark:bg-blue-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md">
+                        <div class="flex items-center gap-2">
+                            <FileText class="h-4 w-4 text-blue-600" />
+                            <div>
+                                <p class="text-xs text-blue-700 dark:text-blue-300">En Progreso</p>
+                                <p class="font-semibold text-blue-700 dark:text-blue-300">{{ props.stats?.in_progress || 0 }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 dark:bg-gray-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md">
+                        <div class="flex items-center gap-2">
+                            <FileText class="h-4 w-4 text-gray-600" />
+                            <div>
+                                <p class="text-xs text-gray-700 dark:text-gray-300">Borradores</p>
+                                <p class="font-semibold text-gray-700 dark:text-gray-300">{{ props.stats?.draft || 0 }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Información de paginación con controles -->
+            <div v-if="props.evaluations?.data && props.evaluations.data.length > 0" class="bg-card rounded-lg p-4 shadow-sm border border-border">
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <!-- Información de registros -->
+                    <div class="text-muted-foreground text-sm">
+                        <span>Mostrando {{ props.evaluations.from }} a {{ props.evaluations.to }} de {{ props.evaluations.total }} evaluaciones</span>
+                    </div>
+                    
+                    <!-- Controles de paginación -->
+                    <div v-if="props.evaluations.last_page > 1" class="flex items-center gap-2">
+                        <!-- Botón anterior -->
+                        <button 
+                            @click="goToPreviousPage"
+                            :disabled="props.evaluations.current_page <= 1"
+                            class="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <ChevronLeft class="h-4 w-4" />
+                            Anterior
+                        </button>
+                        
+                        <!-- Números de página -->
+                        <div class="flex items-center gap-1">
+                            <!-- Primera página si no está visible -->
+                            <template v-if="getPageNumbers()[0] > 1">
+                                <button 
+                                    @click="goToPage(1)"
+                                    class="inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                                >
+                                    1
+                                </button>
+                                <span v-if="getPageNumbers()[0] > 2" class="text-muted-foreground px-1">...</span>
+                            </template>
+                            
+                            <!-- Páginas visibles -->
+                            <button 
+                                v-for="page in getPageNumbers()" 
+                                :key="page"
+                                @click="goToPage(page)"
+                                :class="[
+                                    'inline-flex items-center justify-center w-8 h-8 text-sm font-medium rounded-md transition-colors',
+                                    page === props.evaluations?.current_page 
+                                        ? 'bg-primary text-primary-foreground' 
+                                        : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                                ]"
+                            >
+                                {{ page }}
+                            </button>
+                            
+                            <!-- Última página si no está visible -->
+                            <template v-if="getPageNumbers().length > 0 && getPageNumbers()[getPageNumbers().length - 1] < props.evaluations.last_page">
+                                <span v-if="getPageNumbers()[getPageNumbers().length - 1] < props.evaluations.last_page - 1" class="text-muted-foreground px-1">...</span>
+                                <button 
+                                    @click="goToPage(props.evaluations.last_page)"
+                                    class="inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                                >
+                                    {{ props.evaluations.last_page }}
+                                </button>
+                            </template>
+                        </div>
+                        
+                        <!-- Botón siguiente -->
+                        <button 
+                            @click="goToNextPage"
+                            :disabled="props.evaluations.current_page >= props.evaluations.last_page"
+                            class="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Siguiente
+                            <ChevronRight class="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabla de evaluaciones -->
+            <div class="bg-card rounded-lg overflow-hidden shadow-sm border border-border">
+                <div v-if="props.evaluations?.data && props.evaluations.data.length > 0">
+                    <!-- Encabezados -->
+                    <div class="bg-muted/30 p-4 border-b border-border">
+                        <div class="grid grid-cols-1 md:grid-cols-7 gap-4 font-semibold text-foreground">
+                            <div class="md:col-span-2">Usuario</div>
+                            <div class="md:col-span-1">Título</div>
+                            <div class="hidden md:block">Estado</div>
+                            <div class="hidden md:block">Progreso</div>
+                            <div class="hidden md:block">Puntuación</div>
+                            <div class="hidden md:block">Acciones</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Filas de datos -->
+                    <div>
+                        <div 
+                            v-for="evaluation in props.evaluations.data" 
+                            :key="evaluation.id"
+                            class="border-b border-border p-4 hover:bg-muted/50 transition-colors group"
+                        >
+                            <div class="grid grid-cols-1 md:grid-cols-7 gap-4 items-start md:items-center">
+                                <!-- Usuario -->
+                                <div class="md:col-span-2 cursor-pointer" @click="viewEvaluation(evaluation)">
+                                    <div class="flex items-center gap-3">
+                                        <div class="flex-shrink-0 h-10 w-10">
+                                            <div class="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                                                <Users class="h-5 w-5 text-muted-foreground" />
+                                            </div>
+                                        </div>
+                                        <div class="min-w-0 flex-1">
+                                            <div class="font-semibold text-foreground mb-1 group-hover:text-primary transition-colors truncate">
+                                                {{ evaluation.user.name }}
+                                            </div>
+                                            <div class="text-sm text-muted-foreground truncate">
+                                                {{ evaluation.user.email }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Información adicional en móvil -->
+                                    <div class="md:hidden mt-3 space-y-2">
+                                        <div class="text-sm">
+                                            <strong class="text-foreground">Título:</strong> 
+                                            <span class="text-muted-foreground">{{ truncateText(evaluation.title, 40) }}</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <strong class="text-foreground text-sm">Estado:</strong>
+                                            <span :class="getStatusColor(evaluation.status)" class="inline-flex px-2 py-1 text-xs font-semibold rounded-full">
+                                                {{ getStatusText(evaluation.status) }}
+                                            </span>
+                                        </div>
+                                        <div class="text-sm">
+                                            <strong class="text-foreground">Progreso:</strong>
+                                            <div class="flex items-center gap-2 mt-1">
+                                                <div class="flex-1 bg-muted rounded-full h-2">
+                                                    <div class="bg-primary h-2 rounded-full transition-all" :style="{ width: evaluation.total_progress + '%' }"></div>
+                                                </div>
+                                                <span class="text-xs text-muted-foreground min-w-0">{{ evaluation.total_progress }}%</span>
+                                            </div>
+                                        </div>
+                                        <div class="text-sm">
+                                            <strong class="text-foreground">Puntuación:</strong> 
+                                            <span class="text-muted-foreground">{{ evaluation.total_score }} pts</span>
+                                        </div>
+                                        <div class="text-sm">
+                                            <strong class="text-foreground">Fecha:</strong> 
+                                            <span class="text-muted-foreground">{{ formatDate(evaluation.created_at) }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Título (solo desktop) -->
+                                <div class="hidden md:block">
+                                    <div class="text-sm font-medium text-foreground truncate" :title="evaluation.title">
+                                        {{ truncateText(evaluation.title, 25) }}
+                                    </div>
+                                    <div v-if="evaluation.description" class="text-xs text-muted-foreground truncate" :title="evaluation.description">
+                                        {{ truncateText(evaluation.description, 30) }}
+                                    </div>
+                                </div>
+                                
+                                <!-- Estado (solo desktop) -->
+                                <div class="hidden md:block">
+                                    <span :class="getStatusColor(evaluation.status)" class="inline-flex px-2 py-1 text-xs font-semibold rounded-full">
+                                        {{ getStatusText(evaluation.status) }}
+                                    </span>
+                                </div>
+                                
+                                <!-- Progreso (solo desktop) -->
+                                <div class="hidden md:block">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-16 bg-muted rounded-full h-2">
+                                            <div class="bg-primary h-2 rounded-full transition-all" :style="{ width: evaluation.total_progress + '%' }"></div>
+                                        </div>
+                                        <span class="text-xs text-muted-foreground min-w-0">{{ evaluation.total_progress }}%</span>
+                                    </div>
+                                </div>
+                                
+                                <!-- Puntuación (solo desktop) -->
+                                <div class="hidden md:block text-sm text-foreground">
+                                    {{ evaluation.total_score }} pts
+                                </div>
+                                
+                                <!-- Acciones (solo desktop) -->
+                                <div class="hidden md:flex md:gap-1">
+                                    <Button @click="viewEvaluation(evaluation)" variant="ghost" size="sm" class="h-8 w-8 p-0">
+                                        <Eye class="h-4 w-4" />
+                                    </Button>
+                                    <Button @click="editEvaluation(evaluation.id)" variant="ghost" size="sm" class="h-8 w-8 p-0">
+                                        <Edit class="h-4 w-4" />
+                                    </Button>
+                                    <Button 
+                                        v-if="evaluation.status !== 'draft'"
+                                        @click="resetEvaluation(evaluation.id)" 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        class="h-8 w-8 p-0 text-yellow-600 hover:text-yellow-700"
+                                    >
+                                        <RotateCcw class="h-4 w-4" />
+                                    </Button>
+                                    <Button 
+                                        @click="confirmDelete(evaluation)" 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        class="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                    >
+                                        <Trash2 class="h-4 w-4" />
+                                    </Button>
+                                </div>
+                                
+                                <!-- Acciones en móvil -->
+                                <div class="md:hidden col-span-full flex justify-between items-center mt-3 pt-3 border-t border-border">
+                                    <button 
+                                        @click="viewEvaluation(evaluation)"
+                                        class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-primary hover:text-primary-foreground hover:bg-primary rounded-md transition-colors border border-primary/20 hover:border-primary"
+                                    >
+                                        Ver detalles
+                                    </button>
+                                    <div class="flex gap-2">
+                                        <Button @click="editEvaluation(evaluation.id)" variant="outline" size="sm">
+                                            <Edit class="h-4 w-4" />
+                                            Editar
+                                        </Button>
+                                        <Button 
+                                            v-if="evaluation.status !== 'draft'"
+                                            @click="resetEvaluation(evaluation.id)" 
+                                            variant="outline" 
+                                            size="sm"
+                                            class="text-yellow-600 hover:text-yellow-700"
+                                        >
+                                            <RotateCcw class="h-4 w-4" />
+                                        </Button>
+                                        <Button 
+                                            @click="confirmDelete(evaluation)" 
+                                            variant="destructive" 
+                                            size="sm"
+                                        >
+                                            <Trash2 class="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Estado vacío -->
+                <div v-else class="text-center py-12 px-4">
+                    <div class="text-4xl mb-4">📋</div>
+                    <h3 class="text-lg font-semibold text-foreground mb-2">No hay evaluaciones</h3>
+                    <p class="text-muted-foreground">Aún no se han creado evaluaciones en el sistema.</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Modal de eliminación -->
+        <Teleport to="body">
+            <Transition
+                enter-active-class="transition-opacity duration-300"
+                enter-from-class="opacity-0"
+                enter-to-class="opacity-100"
+                leave-active-class="transition-opacity duration-300"
+                leave-from-class="opacity-100"
+                leave-to-class="opacity-0"
+            >
+                <div 
+                    v-if="showDeleteModal" 
+                    class="fixed inset-0 bg-black/50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4"
+                    @click="closeDeleteModal"
+                >
+                    <Transition
+                        enter-active-class="transition-all duration-300"
+                        enter-from-class="opacity-0 scale-95 translate-y-4"
+                        enter-to-class="opacity-100 scale-100 translate-y-0"
+                        leave-active-class="transition-all duration-300"
+                        leave-from-class="opacity-100 scale-100 translate-y-0"
+                        leave-to-class="opacity-0 scale-95 translate-y-4"
+                    >
+                        <div 
+                            v-if="showDeleteModal"
+                            class="bg-card border border-border rounded-lg shadow-lg w-full max-w-md"
+                            @click.stop
+                        >
+                            <div class="p-6">
+                                <div class="flex items-center justify-center w-12 h-12 mx-auto bg-destructive/10 rounded-full mb-4">
+                                    <Trash2 class="h-6 w-6 text-destructive" />
+                                </div>
+                                <h3 class="text-lg font-semibold text-foreground text-center mb-2">Eliminar Evaluación</h3>
+                                <p class="text-sm text-muted-foreground text-center mb-6">
+                                    ¿Estás seguro de que quieres eliminar la evaluación "{{ evaluationToDelete?.title }}"?
+                                    Esta acción no se puede deshacer.
+                                </p>
+                                <div class="flex gap-3 justify-center">
+                                    <Button @click="closeDeleteModal" variant="outline">
+                                        Cancelar
+                                    </Button>
+                                    <Button
+                                        @click="handleDeleteConfirm(evaluationToDelete!.id)"
+                                        variant="destructive"
+                                    >
+                                        Eliminar
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </Transition>
+                </div>
+            </Transition>
+        </Teleport>
+    </AppLayout>
+</template>

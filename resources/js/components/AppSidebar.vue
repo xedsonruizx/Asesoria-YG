@@ -8,7 +8,7 @@ import posts from '@/routes/posts';
 import users from '@/routes/users';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, FileText, UsersRound } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, FileText, UsersRound, ClipboardList } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
 const mainNavItems: NavItem[] = [
@@ -26,6 +26,11 @@ const mainNavItems: NavItem[] = [
         title: 'usuarios',
         href: users.index(),
         icon: UsersRound,
+    },
+    {
+        title: 'Evaluaciones',
+        href: '/evaluations',
+        icon: ClipboardList,
     },
         {
         title: 'membresias',
