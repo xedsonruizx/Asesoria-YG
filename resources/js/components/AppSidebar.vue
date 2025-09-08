@@ -4,8 +4,8 @@ import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { dashboard, login } from '@/routes';
-import { index as postsIndex } from '@/routes/posts';
-import { index as usersIndex } from '@/routes/posts';
+import posts from '@/routes/posts';
+import users from '@/routes/users';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
 import { BookOpen, Folder, LayoutGrid, FileText, UsersRound } from 'lucide-vue-next';
@@ -19,12 +19,12 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'Publicaciones',
-        href: postsIndex(),
+        href: posts.admin(),
         icon: FileText,
     },
     {
         title: 'usuarios',
-        href: usersIndex(),
+        href: users.index(),
         icon: UsersRound,
     },
         {

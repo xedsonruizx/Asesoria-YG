@@ -5,6 +5,7 @@ use Inertia\Inertia;
 use App\Http\Controllers\PostController;
 use App\Http\Controllers\TagCategoryController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\UserController;
 
 // ============================================
 // RUTAS PÚBLICAS (SIN AUTENTICACIÓN)
@@ -12,6 +13,7 @@ use App\Http\Controllers\CategoryController;
 Route::redirect('/', '/inicio');
 Route::get('/inicio', function () {return Inertia::render('LayoutMaster');})-> name('inicio');
 Route::get('evaluacion', function () {return Inertia::render('ClientMenu/Evaluation');})-> name('evaluacion');
+Route::get('publicaciones', [PostController::class, 'index'])->name('publicaciones');
 Route::get('publicacion/{post}', [PostController::class, 'clientShow'])->name('publicacion.show');
 
 // ============================================
@@ -20,17 +22,21 @@ Route::get('publicacion/{post}', [PostController::class, 'clientShow'])->name('p
 Route::middleware(['auth'])->group(function () {
     // Rutas que requieren permiso 'manage'
     Route::middleware(['permission:manage'])->group(function () {
+
+        Route::get('dashboard', function () {return Inertia::render('administration/Dashboard');})->name('dashboard');
+
         // Resource completo para posts (incluye create, store, edit, etc.)
         Route::resource('posts', PostController::class);
-        
+        Route::resource('users', UserController::class);
+
         // Rutas adicionales para posts
         Route::post('posts/{post}/update-with-files', [PostController::class, 'updateWithFiles'])->name('posts.update-files');
         Route::patch('posts/{post}/status', [PostController::class, 'changeStatus'])->name('posts.change-status');
         Route::delete('/posts/{post}/remove-image', [PostController::class, 'removeImage'])->name('posts.remove-image');
         Route::delete('/posts/{post}/remove-file', [PostController::class, 'removeFile'])->name('posts.remove-file');
-        
-        // Vista administrativa de publicaciones
-        Route::get('publicaciones', [PostController::class, 'AdminIndex'])->name('publicaciones');
+    
+        // Cambiar el nombre para evitar duplicación
+        Route::get('admin/posts', [PostController::class, 'AdminIndex'])->name('posts.admin');
         
         // Resource para tags
         Route::resource('tags', TagCategoryController::class);
@@ -41,6 +47,9 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['permission:guest'])->group(function () {
         // Rutas de solo lectura si las necesitas
     });
+
+
+
 });
 
 require __DIR__.'/settings.php';

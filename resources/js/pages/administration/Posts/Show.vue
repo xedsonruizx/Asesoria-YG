@@ -6,7 +6,7 @@ import { route } from 'ziggy-js';
 import { computed, ref } from 'vue';
 import { ArrowLeft, Calendar, Tag, User, FileText, Image, Video, Download, Lock, Trash2 } from 'lucide-vue-next';
 import Delete from '@/pages/administration/Posts/Delete.vue';
-import { show as postShow, index as postsIndex, edit as postEdit } from '@/routes/posts';
+import { show as postShow, admin as postsIndex, edit as postEdit } from '@/routes/posts';
 import AttachedFiles from '@/components/AttachedFiles.vue'
 
 // Definir la interfaz Post

@@ -2,7 +2,7 @@
 import { ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { index as postsIndex, store } from '@/routes/posts';
+import { admin as postsAdminIndex, store } from '@/routes/posts';
 import { Plus, FileText, Image, ImageIcon } from 'lucide-vue-next';
 import { useForm } from '@inertiajs/vue3';
 import { Button } from '@/components/ui/button';
@@ -52,8 +52,7 @@ const isDragOver = ref(false);
 const isFileDragOver = ref(false);
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Dashboard', href: '/dashboard' },
-    { title: 'Publicaciones', href: postsIndex().url },
+    { title: 'Publicaciones', href: postsAdminIndex().url },
     { title: 'Crear Nueva Publicación', current: true },
 ];
 

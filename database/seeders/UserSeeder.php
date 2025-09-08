@@ -26,6 +26,7 @@ class UserSeeder extends Seeder
             'email_verified_at' => null, // Usuario no verificado inicialmente
             'created_at' => DB::raw('NOW()'),
             'updated_at' => DB::raw('NOW()'),
+            'ispremium' => true,
         ]);
 
         $this->command->info('Usuario administrador creado correctamente.');

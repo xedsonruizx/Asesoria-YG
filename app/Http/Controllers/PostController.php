@@ -17,8 +17,9 @@ class PostController extends Controller
 {
     /**
      * Display a listing of the resource.
+     * Vista de clientes publicaciones
      */
-    public function index(Request $request)
+    public function AdminIndex(Request $request)
     {
         $query = Post::with('tags');
 
@@ -334,7 +335,7 @@ class PostController extends Controller
     /**
      * Display published posts for clients
      */
-    public function AdminIndex()
+    public function Index()
     {
         $posts = Post::with('tags')
                     ->where('status', 'published')

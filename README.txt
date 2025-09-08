@@ -47,3 +47,31 @@ php artisan storage:link
 Comandos para la modificaciones del proyecto
 
 creacion de nueva tabla > php artisan make:migration create_+nombres_plural +_table  > create_usuarios_table
+
+
+
+
+
+PROBLEMAS CON XAMPP?
+
+
+Ejecuta:
+
+netstat -ano | findstr :3306
+
+
+Verás algo como:
+
+TCP    0.0.0.0:3306   0.0.0.0:0   LISTENING   1234
+
+
+→ El número (1234) es el PID.
+
+Identifica el programa con:
+
+tasklist /FI "PID eq 1234"
+
+
+Si confirmas que es otro MySQL/MariaDB, elimínalo:
+
+taskkill /PID 1234 /F

@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { getInitials } from '@/composables/useInitials';
 import UserMenuContent from '@/components/UserMenuContent.vue';
+import MobileMenu from '@/components/MyComponents/MobileMenu.vue';
 
 const isMenuOpen = ref(false);
 const isScrolled = ref(false);
@@ -82,27 +83,26 @@ onUnmounted(() => {
                     </Link>
                     <Link 
                         href="/publicaciones" 
-                        :class="addActiveClasses('text-gray-700 hover:text-blue-900 hover:font-bolder   px-3 py-2 rounded-md text-sm font-medium dark:text-gray-300 dark:hover:text-white' , '/publicaciones')"
+                        :class="addActiveClasses('text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium dark:text-gray-300 dark:hover:text-white', '/publicaciones')"
                     >
                         Publicaciones
                     </Link>
                     
                     <Link 
-                        v-if="$page.props.auth.user == null" 
+                        v-if="auth.user == null" 
                         :href="login()" 
                         :class="addActiveClasses('text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium dark:text-gray-300 dark:hover:text-white', '/login')"
                     >
                         Iniciar sesion
                     </Link>
-                    
-                    <Link
-                        v-if="$page.props.auth.user == null" 
-                        :href="register()"
-                        @click="closeMenu"
+                     <Link 
+                        v-if="auth.user == null" 
+                        :href="register()" 
                         :class="addActiveClasses('text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium dark:text-gray-300 dark:hover:text-white', '/register')"
                     >
-                            Registrate
+                        Registrate
                     </Link>
+
                     <DropdownMenu v-if="auth.user">
                         <DropdownMenuTrigger :as-child="true">
                             <Button
@@ -160,7 +160,12 @@ onUnmounted(() => {
                 </div>
             </div>
         </div>
-
-
+        
+        <!-- Mobile Menu Component -->
+        <MobileMenu 
+            :isMenuOpen="isMenuOpen" 
+            :closeMenu="closeMenu" 
+            :addActiveClasses="addActiveClasses" 
+        />
     </nav>
 </template>

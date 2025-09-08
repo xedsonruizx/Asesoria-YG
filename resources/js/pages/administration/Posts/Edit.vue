@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { Head, router, Link  } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { index as postsIndex, show as postShow, update } from '@/routes/posts';
+import { admin as postsAdminIndex, show as postShow, update } from '@/routes/posts';
 import { ArrowLeft, Save, FileText, ImageIcon, Upload, X, Download, Image, Video } from 'lucide-vue-next';
 import { useForm } from '@inertiajs/vue3';
 import { Button } from '@/components/ui/button';
@@ -89,8 +89,7 @@ const isDragOver = ref(false);
 const isFileDragOver = ref(false);
 
 const breadcrumbs = [
-    { title: 'Dashboard', href: '/dashboard' },
-    { title: 'Publicaciones', href: postsIndex().url },
+    { title: 'Publicaciones', href: postsAdminIndex().url },
     { title: props.post.title, href: postShow(props.post.id).url },
     { title: 'Editar Publicación', current: true },
 ];
