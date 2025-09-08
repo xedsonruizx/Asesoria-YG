@@ -82,9 +82,9 @@ class PostSeeder extends Seeder
                 'image_path' => 'posts/contratos-laborales.jpg',
                 'file_path' => 'posts/modelos-contratos.zip',
                 'author_id' => 1,
-                'published_at' => now()->subDays(20),
-                'created_at' => now()->subDays(20),
-                'updated_at' => now()->subDays(20),
+                'published_at' => DB::raw('DATE_SUB(NOW(), INTERVAL 20 DAY)'),
+                'created_at' => DB::raw('DATE_SUB(NOW(), INTERVAL 20 DAY)'),
+                'updated_at' => DB::raw('DATE_SUB(NOW(), INTERVAL 20 DAY)'),
                 'tag_categories' => [$legalTag->id]
             ],
             [
@@ -208,9 +208,9 @@ class PostSeeder extends Seeder
                 'image_path' => 'posts/transformacion-digital-rrhh.jpg',
                 'file_path' => null,
                 'author_id' => 1,
-                'published_at' => now()->subDay(),
-                'created_at' => now()->subDay(),
-                'updated_at' => now()->subDay(),
+                'published_at' => DB::raw('DATE_SUB(NOW(), INTERVAL 1 DAY)'),
+                'created_at' => DB::raw('DATE_SUB(NOW(), INTERVAL 1 DAY)'),
+                'updated_at' => DB::raw('DATE_SUB(NOW(), INTERVAL 1 DAY)'),
                 'tag_categories' => [$rrhhTag->id]
             ],
         ];
