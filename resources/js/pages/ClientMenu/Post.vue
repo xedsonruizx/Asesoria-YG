@@ -35,7 +35,7 @@ interface User {
     id: number;
     name: string;
     email: string;
-    is_premium: boolean;
+    ispremium: boolean;
 }
 
 interface Props {
@@ -59,7 +59,7 @@ const imageErrors = ref<Record<number, boolean>>({});
 
 // Computed para verificar si el usuario tiene suscripción premium
 const userIsPremium = computed(() => {
-    return props.auth?.user?.is_premium || false;
+    return props.auth?.user?.ispremium || false;
 });
 
 // Computed para filtrar posts publicados (ya vienen filtrados del servidor)
@@ -103,7 +103,7 @@ const handlePostClick = (post: Post) => {
     console.log('🔍 Post clicked:', post.title);
     console.log('🔒 Premium required:', post.is_premium);
     console.log('👤 User is premium:', userIsPremium.value);
-        console.log('🔑 User is premium:', props.auth?.user?.is_premium);
+    console.log('🔑 User is premium:', props.auth?.user?.ispremium);
 
     
     if (post.is_premium && !userIsPremium.value) {
@@ -160,6 +160,7 @@ const openPost = (post: Post) => {
                     :key="post.id"
                     :post="post"
                     :company-name="companyName"
+                    :user-is-premium="userIsPremium"
                     @open-subscription-modal="openSubscriptionModal"
                 />
             </div>

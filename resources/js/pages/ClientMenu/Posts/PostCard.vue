@@ -31,10 +31,12 @@ interface Post {
 interface Props {
     post: Post;
     companyName?: string;
+    userIsPremium?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
-    companyName: 'Asesorías YG'
+    companyName: 'Asesorías YG',
+    userIsPremium: false
 });
 
 // Emits
@@ -67,16 +69,15 @@ const formatDate = (dateString: string) => {
 // Función para manejar clic en post
 const handlePostClick = () => {
     console.log('🔍 Post clicked:', props.post.title);
-    // Agregar este debug temporal
     console.log('🔍 PostCard props:', props.post);
     console.log('🏷️ Tags received:', props.post.tags);
     console.log('🔢 Tags count:', props.post.tags?.length || 0);
     console.log('🔒 Premium required:', props.post.is_premium);
-    console.log('🔑 User is premium:', props.auth?.user?.is_premium);
+    console.log('👤 User is premium:', props.userIsPremium);
 
     
-    if (props.post.is_premium) {
-        // Emitir evento para mostrar modal de suscripción
+    if (props.post.is_premium && !props.userIsPremium) {
+        // Emitir evento para mostrar modal de suscripción solo si no es premium
         console.log('✅ Opening subscription modal...');
         emit('openSubscriptionModal', props.post.title);
         return;
@@ -87,15 +88,15 @@ const handlePostClick = () => {
     router.visit(url);
 };
 </script>
-
+<!-- TODO: Modificar textos para acceso a contenido -->
 <template>
     <article 
         class="relative bg-white dark:bg-[#161615] rounded-lg shadow-[inset_0px_0px_0px_1px_rgba(26,26,0,0.16)] dark:shadow-[inset_0px_0px_0px_1px_#fffaed2d] overflow-hidden hover:shadow-lg transition-all duration-300 cursor-pointer group"
         @click="handlePostClick"
     >
-        <!-- Candado para contenido premium -->
+        <!-- Candado para contenido premium (solo si el usuario no es premium) -->
         <div 
-            v-if="post.is_premium"
+            v-if="post.is_premium && !userIsPremium"
             class="absolute top-4 right-4 z-10 bg-yellow-500 text-white p-2 rounded-full shadow-lg"
         >
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -152,7 +153,7 @@ const handlePostClick = () => {
             
             <!-- Overlay para contenido premium -->
             <div 
-                v-if="post.is_premium"
+                v-if="post.is_premium && !userIsPremium"
                 class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center"
             >
                 <div class="text-center text-white">

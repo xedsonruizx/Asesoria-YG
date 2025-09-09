@@ -242,7 +242,9 @@ class PostController extends Controller
                         'slug' => $tag->slug,
                         'color' => $tag->color
                     ];
-                })
+                }),
+                'image_path' => $post->image_path ? asset('storage/' . $post->image_path) : null,
+                'file_path' => $post->file_path ? asset('storage/' . $post->file_path) : null,
             ])
         ]);
     }

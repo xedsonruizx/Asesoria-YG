@@ -4,9 +4,14 @@ import TopBar from '@/components/MyComponents/TopBar.vue';
 import SubscriptionModal from '@/components/MyComponents/SubscriptionModal.vue';
 import { computed, ref } from 'vue';
 import { ArrowLeft, Calendar, Tag, User, FileText, Image, Video, Download, Lock, Eye, Share2 } from 'lucide-vue-next';
+import { usePage } from '@inertiajs/vue3';
 
 // Obtener el nombre de la empresa desde las variables de entorno
 const companyName = import.meta.env.VITE_COMPANY_NAME || 'Asesorías YG';
+
+// Obtener datos del usuario autenticado
+const page = usePage();
+const auth = computed(() => page.props.auth as { user: { id: number; name: string; email: string; ispremium: boolean } | null });
 
 // Definir la interfaz Post actualizada
 interface Post {
@@ -40,7 +45,7 @@ const props = defineProps<Props>();
 
 // Estado del modal y suscripción
 const showSubscriptionModal = ref(false);
-const userHasActiveSubscription = false; // Esto vendría de props o store
+const userHasActiveSubscription = computed(() => auth.value.user?.ispremium || false);
 
 // Estados para manejo de errores de imágenes
 const imageLoadError = ref(false);
