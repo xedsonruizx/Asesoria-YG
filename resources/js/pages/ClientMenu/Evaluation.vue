@@ -65,10 +65,37 @@ interface Props {
 const props = defineProps<Props>();
 
 // Estado reactivo
+const evaluation = ref<Evaluation>(props.evaluation);
 const answers = ref<Record<number, any>>(props.answers || {});
 const showResults = ref<boolean>(props.showResults || props.evaluation?.is_completed || false);
 const isSubmitting = ref<boolean>(false);
 const notification = ref<{ type: string; message: string }>({ type: '', message: '' });
+
+// Agregar la computed property faltante para agrupar preguntas por categoría
+const visibleQuestionsByCategory = computed(() => {
+    const categoriesWithQuestions = props.categories.map(category => {
+        // Filtrar preguntas de esta categoría
+        const categoryQuestions = props.questions.filter(q => 
+            q.category_id === category.id && q.is_active
+        );
+        
+        // Filtrar preguntas visibles basándose en show_condition
+        const visibleQuestions = categoryQuestions.filter(question => {
+            if (!question.show_condition) return true;
+            
+            const conditionAnswer = answers.value[question.show_condition.questionId];
+            return conditionAnswer === question.show_condition.answer;
+        });
+        
+        return {
+            ...category,
+            questions: visibleQuestions.sort((a, b) => a.order - b.order)
+        };
+    });
+    
+    // Solo devolver categorías que tienen preguntas visibles
+    return categoriesWithQuestions.filter(category => category.questions.length > 0);
+});
 
 // Computed para puntajes por categoría
 const categoryScores = computed(() => {
@@ -161,7 +188,8 @@ const submitEvaluation = async () => {
     }
 };
 
-const restartEvaluation = async () => {
+// Función para manejar el reinicio de la evaluación
+const handleRestart = async () => {
     try {
         await axios.post('/evaluation/restart', {
             evaluation_id: evaluation.value.id
@@ -173,8 +201,14 @@ const restartEvaluation = async () => {
         evaluation.value.is_completed = false;
         evaluation.value.completed_at = undefined;
         
-        showNotification('success', 'Evaluación reiniciada correctamente.');
+        showNotification('success', 'Evaluación reiniciada correctamente. Refrescando página...');
+        
+        // Refrescar la página después de 2 segundos
+        setTimeout(() => {
+            window.location.reload();
+        }, 2000);
     } catch (error) {
+        console.log(error);
         showNotification('error', 'Error al reiniciar la evaluación.');
     }
 };
@@ -203,11 +237,6 @@ const getCircularProgress = (progress: number) => {
     const strokeDashoffset = circumference - (progress / 100) * circumference;
     return { strokeDasharray, strokeDashoffset };
 };
-
-// Función para manejar el reinicio de la evaluación
-const handleRestart = () => {
-    restartEvaluation();
-}
 
 // Función para manejar la solicitud de consulta
 const handleRequestConsultation = () => {

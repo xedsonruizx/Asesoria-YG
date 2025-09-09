@@ -60,6 +60,7 @@ Route::middleware(['auth'])->group(function () {
             'destroy' => 'admin.evaluations.destroy'
         ]);
         Route::post('evaluations/{evaluation}/reset', [EvaluationAdminController::class, 'reset'])->name('admin.evaluations.reset');
+        Route::get('/evaluations/{id}/pdf', [EvaluationAdminController::class, 'generatePdf'])->name('admin.evaluations.pdf');
     });
     
     // Rutas que requieren permiso 'guest' (solo ver)

@@ -93,13 +93,17 @@ class Evaluation extends Model
             'categories' => [],
             'recommendations' => [],
         ];
-
+    
+        $maxTotalScore = 0; // Agregar esta línea
+        
         foreach ($categories as $category) {
             $categoryScore = $this->category_scores[$category->slug] ?? 0;
             $categoryProgress = $this->category_progress[$category->slug] ?? 0;
             $maxScore = $category->max_score;
             $percentage = $maxScore > 0 ? round(($categoryScore / $maxScore) * 100) : 0;
-
+            
+            $maxTotalScore += $maxScore; // Agregar esta línea
+    
             $report['categories'][] = [
                 'name' => $category->name,
                 'slug' => $category->slug,
@@ -110,7 +114,7 @@ class Evaluation extends Model
                 'color' => $category->color,
                 'status' => $this->getCategoryStatus($percentage),
             ];
-
+    
             // Generar recomendaciones basadas en el puntaje
             if ($percentage < 60) {
                 $report['recommendations'][] = [
@@ -126,6 +130,10 @@ class Evaluation extends Model
                 ];
             }
         }
+    
+        // Agregar los campos faltantes
+        $report['max_total_score'] = $maxTotalScore;
+        $report['total_percentage'] = $maxTotalScore > 0 ? round(($this->total_score / $maxTotalScore) * 100, 1) : 0;
 
         return $report;
     }

@@ -5,6 +5,8 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Button } from '@/components/ui/button';
 import { Plus, Edit, Trash2, Eye, RotateCcw, FileText, Users, ChevronLeft, ChevronRight } from 'lucide-vue-next';
 import { type BreadcrumbItem } from '@/types';
+import { Download } from 'lucide-vue-next';
+
 
 // Props del backend
 interface User {
@@ -46,14 +48,57 @@ interface Stats {
 const props = withDefaults(defineProps<{
   evaluations: EvaluationsData;
   stats: Stats;
+  filters?: {
+    user?: string;
+  };
 }>(), {
   evaluations: () => ({ data: [], current_page: 1, last_page: 1, per_page: 10, total: 0, from: 0, to: 0 }),
-  stats: () => ({ total: 0, completed: 0, in_progress: 0, draft: 0 })
+  stats: () => ({ total: 0, completed: 0, in_progress: 0, draft: 0 }),
+  filters: () => ({})
 });
 
 // Estado para el modal de eliminación
 const showDeleteModal = ref(false);
 const evaluationToDelete = ref<Evaluation | null>(null);
+
+// Estado para filtros - inicializar con valores del backend
+const filters = ref({
+  user: props.filters?.user || ''
+});
+const showFilters = ref(false);
+
+// Función para aplicar filtros
+const applyFilters = () => {
+  const params: any = { page: 1 }; // Resetear a página 1 cuando se aplican filtros
+  
+  if (filters.value.user.trim()) {
+    params.user = filters.value.user.trim();
+  }
+  
+  router.visit('/evaluations', {
+    data: params,
+    preserveState: true,
+    preserveScroll: true,
+  });
+};
+
+// Función para limpiar filtros
+const clearFilters = () => {
+  filters.value = {
+    user: ''
+  };
+  
+  router.visit('/evaluations', {
+    data: { page: 1 },
+    preserveState: true,
+    preserveScroll: true,
+  });
+};
+
+// Función para alternar la visibilidad de filtros
+const toggleFilters = () => {
+  showFilters.value = !showFilters.value;
+};
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -141,8 +186,15 @@ const handleDeleteConfirm = (evaluationId: number) => {
 // Funciones de paginación
 const goToPage = (page: number) => {
   if (page >= 1 && page <= (props.evaluations?.last_page || 1)) {
+    const params: any = { page };
+    
+    // Preservar filtro de usuario activo
+    if (filters.value.user.trim()) {
+      params.user = filters.value.user.trim();
+    }
+    
     router.visit('/evaluations', {
-      data: { page },
+      data: params,
       preserveState: true,
       preserveScroll: true,
     });
@@ -198,6 +250,41 @@ const truncateText = (text: string, maxLength: number = 30) => {
   }
   return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
 };
+
+const getCategoryDisplayName = (categorySlug: string): string => {
+  const categoryNames: Record<string, string> = {
+    'rrhh': 'RRHH',
+    'legal': 'Legal',
+    'financiero': 'Financiero',
+    'operacional': 'Operacional'
+  };
+  return categoryNames[categorySlug] || categorySlug;
+};
+
+const getCategoryMaxScore = (categorySlug: string): number => {
+  // Basado en el seeder, todas las categorías tienen max_score de 100
+  return 100;
+};
+
+const getCategoryPercentage = (score: number, maxScore: number): number => {
+  return maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+};
+
+const getCategoryBarColor = (score: number, maxScore: number): string => {
+  const percentage = getCategoryPercentage(score, maxScore);
+  
+  if (percentage >= 90) return 'bg-green-500'; // Excelente
+  if (percentage >= 80) return 'bg-green-400'; // Bueno
+  if (percentage >= 60) return 'bg-yellow-500'; // Regular
+  if (percentage >= 40) return 'bg-orange-500'; // Deficiente
+  return 'bg-red-500'; // Crítico
+};
+
+
+const downloadPdf = (evaluationId: number) => {
+    window.open(`/evaluations/${evaluationId}/pdf`, '_blank');
+}
+
 </script>
 
 <template>
@@ -222,7 +309,7 @@ const truncateText = (text: string, maxLength: number = 30) => {
                 </div>
                 
                 <!-- Estadísticas -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div class="bg-muted px-3 sm:px-4 py-2 sm:py-3 rounded-md">
                         <div class="flex items-center gap-2">
                             <FileText class="h-4 w-4 text-blue-600" />
@@ -232,7 +319,7 @@ const truncateText = (text: string, maxLength: number = 30) => {
                             </div>
                         </div>
                     </div>
-                    <div class="bg-green-50 dark:bg-green-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md">
+                    <!-- <div class="bg-green-50 dark:bg-green-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md">
                         <div class="flex items-center gap-2">
                             <FileText class="h-4 w-4 text-green-600" />
                             <div>
@@ -240,17 +327,8 @@ const truncateText = (text: string, maxLength: number = 30) => {
                                 <p class="font-semibold text-green-700 dark:text-green-300">{{ props.stats?.completed || 0 }}</p>
                             </div>
                         </div>
-                    </div>
-                    <div class="bg-blue-50 dark:bg-blue-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md">
-                        <div class="flex items-center gap-2">
-                            <FileText class="h-4 w-4 text-blue-600" />
-                            <div>
-                                <p class="text-xs text-blue-700 dark:text-blue-300">En Progreso</p>
-                                <p class="font-semibold text-blue-700 dark:text-blue-300">{{ props.stats?.in_progress || 0 }}</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="bg-gray-50 dark:bg-gray-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md">
+                    </div> -->
+                    <!-- <div class="bg-gray-50 dark:bg-gray-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md">
                         <div class="flex items-center gap-2">
                             <FileText class="h-4 w-4 text-gray-600" />
                             <div>
@@ -258,6 +336,60 @@ const truncateText = (text: string, maxLength: number = 30) => {
                                 <p class="font-semibold text-gray-700 dark:text-gray-300">{{ props.stats?.draft || 0 }}</p>
                             </div>
                         </div>
+                    </div> -->
+                </div>
+            </div>
+
+            <!-- Sección de Filtros -->
+            <div class="bg-card rounded-lg p-4 shadow-sm border border-border">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                    <h2 class="text-lg font-semibold text-foreground">Filtro de Usuario</h2>
+                    <button 
+                        @click="toggleFilters"
+                        class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                    >
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z" />
+                        </svg>
+                        {{ showFilters ? 'Ocultar Filtro' : 'Mostrar Filtro' }}
+                    </button>
+                </div>
+                
+                <div v-show="showFilters" class="space-y-4">
+                    <div class="grid grid-cols-1 gap-4">
+                        <!-- Filtro de usuario por texto -->
+                        <div>
+                            <label class="block text-sm font-medium text-foreground mb-2">Buscar por Usuario</label>
+                            <input 
+                                v-model="filters.user"
+                                type="text" 
+                                placeholder="Escribe el nombre o email del usuario..."
+                                class="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                                @keyup.enter="applyFilters"
+                            >
+                        </div>
+                    </div>
+                    
+                    <!-- Botones de acción -->
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <button 
+                            @click="applyFilters"
+                            class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md transition-colors font-medium text-sm"
+                        >
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                            Buscar
+                        </button>
+                        <button 
+                            @click="clearFilters"
+                            class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground rounded-md transition-colors font-medium text-sm"
+                        >
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            Limpiar
+                        </button>
                     </div>
                 </div>
             </div>
@@ -340,12 +472,10 @@ const truncateText = (text: string, maxLength: number = 30) => {
                 <div v-if="props.evaluations?.data && props.evaluations.data.length > 0">
                     <!-- Encabezados -->
                     <div class="bg-muted/30 p-4 border-b border-border">
-                        <div class="grid grid-cols-1 md:grid-cols-7 gap-4 font-semibold text-foreground">
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 font-semibold text-foreground">
                             <div class="md:col-span-2">Usuario</div>
-                            <div class="md:col-span-1">Título</div>
                             <div class="hidden md:block">Estado</div>
-                            <div class="hidden md:block">Progreso</div>
-                            <div class="hidden md:block">Puntuación</div>
+                            <div class="hidden md:block">Puntuación por Categoría</div>
                             <div class="hidden md:block">Acciones</div>
                         </div>
                     </div>
@@ -353,13 +483,13 @@ const truncateText = (text: string, maxLength: number = 30) => {
                     <!-- Filas de datos -->
                     <div>
                         <div 
-                            v-for="evaluation in props.evaluations.data" 
+                            v-for="evaluation in props.evaluations.data.filter(e => e.status === 'completed')" 
                             :key="evaluation.id"
                             class="border-b border-border p-4 hover:bg-muted/50 transition-colors group"
                         >
-                            <div class="grid grid-cols-1 md:grid-cols-7 gap-4 items-start md:items-center">
+                            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-start md:items-center">
                                 <!-- Usuario -->
-                                <div class="md:col-span-2 cursor-pointer" @click="viewEvaluation(evaluation)">
+                                <div class="md:col-span-2 cursor-pointer">
                                     <div class="flex items-center gap-3">
                                         <div class="flex-shrink-0 h-10 w-10">
                                             <div class="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
@@ -378,10 +508,6 @@ const truncateText = (text: string, maxLength: number = 30) => {
                                     
                                     <!-- Información adicional en móvil -->
                                     <div class="md:hidden mt-3 space-y-2">
-                                        <div class="text-sm">
-                                            <strong class="text-foreground">Título:</strong> 
-                                            <span class="text-muted-foreground">{{ truncateText(evaluation.title, 40) }}</span>
-                                        </div>
                                         <div class="flex items-center gap-2">
                                             <strong class="text-foreground text-sm">Estado:</strong>
                                             <span :class="getStatusColor(evaluation.status)" class="inline-flex px-2 py-1 text-xs font-semibold rounded-full">
@@ -389,32 +515,30 @@ const truncateText = (text: string, maxLength: number = 30) => {
                                             </span>
                                         </div>
                                         <div class="text-sm">
-                                            <strong class="text-foreground">Progreso:</strong>
-                                            <div class="flex items-center gap-2 mt-1">
-                                                <div class="flex-1 bg-muted rounded-full h-2">
-                                                    <div class="bg-primary h-2 rounded-full transition-all" :style="{ width: evaluation.total_progress + '%' }"></div>
-                                                </div>
-                                                <span class="text-xs text-muted-foreground min-w-0">{{ evaluation.total_progress }}%</span>
-                                            </div>
-                                        </div>
-                                        <div class="text-sm">
-                                            <strong class="text-foreground">Puntuación:</strong> 
+                                            <strong class="text-foreground">Puntuación Total:</strong> 
                                             <span class="text-muted-foreground">{{ evaluation.total_score }} pts</span>
+                                        </div>
+                                        <!-- Puntuación por categorías en móvil -->
+                                        <div class="text-sm">
+                                            <strong class="text-foreground">Categorías:</strong>
+                                            <div class="mt-2 space-y-2">
+                                                <div v-for="(score, category) in evaluation.category_scores" :key="category" v-show="score > 0" class="flex items-center gap-2">
+                                                    <span class="text-xs font-medium min-w-0 flex-shrink-0">{{ getCategoryDisplayName(category) }}:</span>
+                                                    <div class="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                                        <div 
+                                                            class="h-2 rounded-full transition-all" 
+                                                            :class="getCategoryBarColor(score, getCategoryMaxScore(category))"
+                                                            :style="{ width: getCategoryPercentage(score, getCategoryMaxScore(category)) + '%' }"
+                                                        ></div>
+                                                    </div>
+                                                    <span class="text-xs text-muted-foreground min-w-0 flex-shrink-0">{{ score }}/{{ getCategoryMaxScore(category) }}</span>
+                                                </div>
+                                            </div>
                                         </div>
                                         <div class="text-sm">
                                             <strong class="text-foreground">Fecha:</strong> 
                                             <span class="text-muted-foreground">{{ formatDate(evaluation.created_at) }}</span>
                                         </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Título (solo desktop) -->
-                                <div class="hidden md:block">
-                                    <div class="text-sm font-medium text-foreground truncate" :title="evaluation.title">
-                                        {{ truncateText(evaluation.title, 25) }}
-                                    </div>
-                                    <div v-if="evaluation.description" class="text-xs text-muted-foreground truncate" :title="evaluation.description">
-                                        {{ truncateText(evaluation.description, 30) }}
                                     </div>
                                 </div>
                                 
@@ -425,38 +549,33 @@ const truncateText = (text: string, maxLength: number = 30) => {
                                     </span>
                                 </div>
                                 
-                                <!-- Progreso (solo desktop) -->
+                                <!-- Puntuación por categorías (solo desktop) -->
                                 <div class="hidden md:block">
-                                    <div class="flex items-center gap-2">
-                                        <div class="w-16 bg-muted rounded-full h-2">
-                                            <div class="bg-primary h-2 rounded-full transition-all" :style="{ width: evaluation.total_progress + '%' }"></div>
+                                    <div class="space-y-2">
+                                        <div v-for="(score, category) in evaluation.category_scores" :key="category" v-show="score > 0" class="flex items-center gap-2">
+                                            <span class="text-xs font-medium min-w-0 w-16 flex-shrink-0 truncate" :title="getCategoryDisplayName(category)">{{ getCategoryDisplayName(category) }}:</span>
+                                            <div class="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2 min-w-0">
+                                                <div 
+                                                    class="h-2 rounded-full transition-all" 
+                                                    :class="getCategoryBarColor(score, getCategoryMaxScore(category))"
+                                                    :style="{ width: getCategoryPercentage(score, getCategoryMaxScore(category)) + '%' }"
+                                                ></div>
+                                            </div>
+                                            <span class="text-xs text-muted-foreground min-w-0 flex-shrink-0">{{ score }}/{{ getCategoryMaxScore(category) }}</span>
                                         </div>
-                                        <span class="text-xs text-muted-foreground min-w-0">{{ evaluation.total_progress }}%</span>
+                                        <!-- <div class="text-xs text-muted-foreground mt-1">
+                                            <strong>Total:</strong> {{ evaluation.total_score }} pts
+                                        </div> -->
                                     </div>
-                                </div>
-                                
-                                <!-- Puntuación (solo desktop) -->
-                                <div class="hidden md:block text-sm text-foreground">
-                                    {{ evaluation.total_score }} pts
                                 </div>
                                 
                                 <!-- Acciones (solo desktop) -->
                                 <div class="hidden md:flex md:gap-1">
-                                    <Button @click="viewEvaluation(evaluation)" variant="ghost" size="sm" class="h-8 w-8 p-0">
-                                        <Eye class="h-4 w-4" />
-                                    </Button>
-                                    <Button @click="editEvaluation(evaluation.id)" variant="ghost" size="sm" class="h-8 w-8 p-0">
-                                        <Edit class="h-4 w-4" />
-                                    </Button>
-                                    <Button 
-                                        v-if="evaluation.status !== 'draft'"
-                                        @click="resetEvaluation(evaluation.id)" 
-                                        variant="ghost" 
-                                        size="sm" 
-                                        class="h-8 w-8 p-0 text-yellow-600 hover:text-yellow-700"
-                                    >
-                                        <RotateCcw class="h-4 w-4" />
-                                    </Button>
+                                       <Button
+                                            variant="outline"  size="sm" @click="downloadPdf(evaluation.id)" class="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                        >
+                                            <Download class="h-4 w-4" />
+                                        </Button>
                                     <Button 
                                         @click="confirmDelete(evaluation)" 
                                         variant="ghost" 
@@ -469,26 +588,12 @@ const truncateText = (text: string, maxLength: number = 30) => {
                                 
                                 <!-- Acciones en móvil -->
                                 <div class="md:hidden col-span-full flex justify-between items-center mt-3 pt-3 border-t border-border">
-                                    <button 
-                                        @click="viewEvaluation(evaluation)"
-                                        class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-primary hover:text-primary-foreground hover:bg-primary rounded-md transition-colors border border-primary/20 hover:border-primary"
-                                    >
-                                        Ver detalles
-                                    </button>
-                                    <div class="flex gap-2">
-                                        <Button @click="editEvaluation(evaluation.id)" variant="outline" size="sm">
-                                            <Edit class="h-4 w-4" />
-                                            Editar
-                                        </Button>
-                                        <Button 
-                                            v-if="evaluation.status !== 'draft'"
-                                            @click="resetEvaluation(evaluation.id)" 
-                                            variant="outline" 
-                                            size="sm"
-                                            class="text-yellow-600 hover:text-yellow-700"
+                                    <Button
+                                            variant="outline"  size="sm" @click="downloadPdf(evaluation.id)" class="text-green-600 hover:text-green-700 hover:bg-green-50"
                                         >
-                                            <RotateCcw class="h-4 w-4" />
-                                        </Button>
+                                            <Download class="h-4 w-4" />
+                                    </Button>
+                                    <div class="flex gap-2">
                                         <Button 
                                             @click="confirmDelete(evaluation)" 
                                             variant="destructive" 
@@ -504,6 +609,13 @@ const truncateText = (text: string, maxLength: number = 30) => {
                 </div>
                 
                 <!-- Estado vacío -->
+                <div v-else-if="props.evaluations?.data && props.evaluations.data.filter(e => e.status === 'completed').length === 0" class="text-center py-12 px-4">
+                    <div class="text-4xl mb-4">📋</div>
+                    <h3 class="text-lg font-semibold text-foreground mb-2">No hay evaluaciones completadas</h3>
+                    <p class="text-muted-foreground">Aún no se han completado evaluaciones en el sistema.</p>
+                </div>
+                
+                <!-- Estado vacío general -->
                 <div v-else class="text-center py-12 px-4">
                     <div class="text-4xl mb-4">📋</div>
                     <h3 class="text-lg font-semibold text-foreground mb-2">No hay evaluaciones</h3>
@@ -568,3 +680,4 @@ const truncateText = (text: string, maxLength: number = 30) => {
         </Teleport>
     </AppLayout>
 </template>
+

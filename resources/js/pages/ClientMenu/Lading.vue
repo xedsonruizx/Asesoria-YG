@@ -1,8 +1,22 @@
 <script setup lang="ts">
-import { publicaciones, evaluacion } from '@/routes';
-import { Link } from '@inertiajs/vue3';
-const companyName = import.meta.env.VITE_COMPANY_NAME || 'Asesorías YG';
+import { publicaciones, evaluacion, login } from '@/routes';
+import { Link, usePage, router } from '@inertiajs/vue3';
+import { computed } from 'vue';
 
+const companyName = import.meta.env.VITE_COMPANY_NAME || 'Asesorías YG';
+const page = usePage();
+const auth = computed(() => page.props.auth);
+
+// Función para manejar el click en "Evaluacion previa"
+const handleEvaluationClick = () => {
+    if (auth.value?.user) {
+        // Usuario autenticado - ir directamente a evaluación
+        router.visit(evaluacion().url);
+    } else {
+        // Usuario no autenticado - ir al login, Laravel manejará el redirect automáticamente
+        router.visit(login().url + '?intended=' + encodeURIComponent(evaluacion().url));
+    }
+};
 </script>
 <template>
         <!-- SECCIÓN HERO -->
@@ -18,12 +32,12 @@ const companyName = import.meta.env.VITE_COMPANY_NAME || 'Asesorías YG';
                         Tu tranquilidad legal es nuestra prioridad.
                     </p>
                     <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                        <Link 
-                            :href="evaluacion()" 
+                        <button 
+                            @click="handleEvaluationClick"
                             class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg font-semibold text-lg transition-colors duration-200"
                         >
                             Evaluacion previa
-                        </Link>
+                        </button>
                         <Link 
                             :href="publicaciones()" 
                             class="border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white px-8 py-4 rounded-lg font-semibold text-lg transition-colors duration-200 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-400 dark:hover:text-white"

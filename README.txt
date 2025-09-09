@@ -20,6 +20,10 @@ Crear base de datos para conectar
 Crear tablas mediante comando >  php artisan migrate
 Comando que creara tablas para el inicio de sesion
 
+#Instalar dependencias
+
+> composer install
+> npm install
 
 
 REFRESCAR RUTAS DEPUES DE NUEVA RUTAS
@@ -30,6 +34,11 @@ php artisan view:clear
 
 LINKEAR CARPETA PARA GUARDAR ARCHIVOS
 php artisan storage:link
+php artisan vendor:publish --provider="Barryvdh\DomPDF\ServiceProvider"
+
+
+#Correr proyecto
+
 
 
 2 consolas para front y back
