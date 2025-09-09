@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
-import { router } from '@inertiajs/vue3'; // ← Asegúrate de tener esta importación
+import { router } from '@inertiajs/vue3';
 import TopBar from '@/components/MyComponents/TopBar.vue';
 import SubscriptionModal from '@/components/MyComponents/SubscriptionModal.vue';
+import PostCard from './Posts/PostCard.vue';
 import { computed, ref } from 'vue';
 import { Image } from 'lucide-vue-next';
 
@@ -11,17 +12,37 @@ interface Post {
     id: number;
     title: string;
     content: string;
-    category: string;
+    excerpt?: string;
+    slug: string;
+    meta_description?: string;
     status: string;
+    is_premium: boolean;
     image_path: string | null;
     file_path: string | null;
-    subscripcion: boolean;
+    author_id?: number;
+    published_at?: string;
     created_at: string;
     updated_at: string;
+    tags?: Array<{
+        id: number;
+        name: string;
+        slug: string;
+        color: string;
+    }>;
+}
+
+interface User {
+    id: number;
+    name: string;
+    email: string;
+    is_premium: boolean;
 }
 
 interface Props {
     posts: Post[];
+    auth?: {
+        user: User;
+    };
 }
 
 const props = defineProps<Props>();
@@ -36,14 +57,15 @@ const selectedPostTitle = ref('');
 // Estado para manejar errores de imagen
 const imageErrors = ref<Record<number, boolean>>({});
 
-// Simulamos el estado de suscripción del usuario (esto vendría de props o store)
-const userHasActiveSubscription = false; // Cambiar según el estado real del usuario
+// Computed para verificar si el usuario tiene suscripción premium
+const userIsPremium = computed(() => {
+    return props.auth?.user?.is_premium || false;
+});
 
 // Computed para filtrar posts publicados (ya vienen filtrados del servidor)
 const publishedPosts = computed(() => {
     return props.posts;
 });
-
 
 // Función para cerrar el modal
 const closeSubscriptionModal = () => {
@@ -51,20 +73,20 @@ const closeSubscriptionModal = () => {
     selectedPostTitle.value = '';
 };
 
+// Función para abrir el modal de suscripción
+const openSubscriptionModal = (postTitle: string) => {
+    selectedPostTitle.value = postTitle;
+    showSubscriptionModal.value = true;
+};
+
 // Función para manejar errores de imagen
 const handleImageError = (postId: number) => {
     imageErrors.value[postId] = true;
 };
 
-// Función para obtener el color de la categoría
-const getCategoryColor = (category: string) => {
-    const colors = {
-        'Legal': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-        'RRHH': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-        'Finanzas': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-        'Tecnología': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-    };
-    return colors[category] || 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
+// Función para obtener el color de la etiqueta
+const getTagColor = (color: string) => {
+    return color || 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
 };
 
 // Función para formatear fecha
@@ -79,21 +101,34 @@ const formatDate = (dateString: string) => {
 // Función para manejar clic en post
 const handlePostClick = (post: Post) => {
     console.log('🔍 Post clicked:', post.title);
-    console.log('🔒 Subscription required:', post.subscripcion);
-    console.log('👤 User has subscription:', userHasActiveSubscription);
+    console.log('🔒 Premium required:', post.is_premium);
+    console.log('👤 User is premium:', userIsPremium.value);
+        console.log('🔑 User is premium:', props.auth?.user?.is_premium);
+
     
-    if (post.subscripcion && !userHasActiveSubscription) {
-        // Mostrar modal de suscripción
+    if (post.is_premium && !userIsPremium.value) {
+        // Mostrar modal de suscripción si el post es premium y el usuario no lo es
         console.log('✅ Opening subscription modal...');
-        selectedPostTitle.value = post.title;
-        showSubscriptionModal.value = true;
+        openSubscriptionModal(post.title);
         return;
     }
     
-    // Navegar al show del post
-    router.visit(`/publicacion/${post.id}`);
+    // Navegar al show del post usando slug si está disponible
+    const url = post.slug ? `/publicacion/${post.slug}` : `/publicacion/${post.id}`;
+    router.visit(url);
 };
 
+const openPost = (post: Post) => {
+    // Verificar si el post es premium y el usuario no tiene suscripción
+    if (post.is_premium && !userIsPremium.value) {
+        console.log('✅ Opening subscription modal...');
+        openSubscriptionModal(post.title);
+        return;
+    }
+    
+    // Navegar al show del post usando slug
+    router.visit(`/publicacion/${post.slug}`);
+};
 </script>
 
 <template>
@@ -120,115 +155,13 @@ const handlePostClick = (post: Post) => {
             
             <!-- Grid de publicaciones -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                <article 
+                <PostCard 
                     v-for="post in publishedPosts" 
                     :key="post.id"
-                    class="relative bg-white dark:bg-[#161615] rounded-lg shadow-[inset_0px_0px_0px_1px_rgba(26,26,0,0.16)] dark:shadow-[inset_0px_0px_0px_1px_#fffaed2d] overflow-hidden hover:shadow-lg transition-all duration-300 cursor-pointer group"
-                    @click="handlePostClick(post)"
-                >
-                    <!-- Candado para contenido de pago -->
-                    <div 
-                        v-if="post.subscripcion && !userHasActiveSubscription"
-                        class="absolute top-4 right-4 z-10 bg-yellow-500 text-white p-2 rounded-full shadow-lg"
-                    >
-                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
-                        </svg>
-                    </div>
-
-                    <!-- Badge de categoría -->
-                    <div class="absolute top-4 left-4 z-10">
-                        <span :class="getCategoryColor(post.category)" class="px-2 py-1 rounded-full text-xs font-medium">
-                            {{ post.category }}
-                        </span>
-                    </div>
-                    
-                    <!-- Imagen del post -->
-                    <div class="aspect-video bg-gray-200 dark:bg-gray-700 relative overflow-hidden">
-                        <!-- Imagen disponible y sin errores -->
-                        <img 
-                            v-if="post.image_path && !imageErrors[post.id]"
-                            :src="post.image_path" 
-                            :alt="post.title"
-                            class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            @error="handleImageError(post.id)"
-                        />
-                        
-                        <!-- Placeholder cuando hay error de carga -->
-                        <div v-else-if="post.image_path && imageErrors[post.id]" class="w-full h-full flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-                            <div class="text-center text-gray-400 dark:text-gray-500">
-                                <Image class="h-8 w-8 mx-auto mb-2 opacity-40" />
-                                <p class="text-sm font-medium mb-1">Imagen no disponible</p>
-                                <p class="text-xs opacity-75">Error al cargar la imagen</p>
-                            </div>
-                        </div>
-                        
-                        <!-- Placeholder cuando no hay imagen -->
-                        <div v-else class="w-full h-full flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-                            <div class="text-center text-gray-400 dark:text-gray-500">
-                                <Image class="h-8 w-8 mx-auto mb-2 opacity-40" />
-                                <p class="text-sm font-medium mb-1">Sin imagen</p>
-                                <p class="text-xs opacity-75">Esta publicación no tiene imagen</p>
-                            </div>
-                        </div>
-                        
-                        <!-- Overlay para contenido de pago -->
-                        <div 
-                            v-if="post.subscripcion && !userHasActiveSubscription"
-                            class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center"
-                        >
-                            <div class="text-center text-white">
-                                <svg class="w-12 h-12 mx-auto mb-2 opacity-80" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
-                                </svg>
-                                <p class="text-sm font-medium">Contenido Premium</p>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Contenido del post -->
-                    <div class="p-6">
-                        <!-- Fecha y archivo adjunto -->
-                        <div class="flex items-center justify-between text-sm text-[#706f6c] dark:text-[#A1A09A] mb-3">
-                            <span>{{ formatDate(post.created_at) }}</span>
-                            <div class="flex items-center space-x-2">
-                                <!-- Indicador de archivo descargable -->
-                                <svg v-if="post.file_path" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                <span>{{ companyName }}</span>
-                            </div>
-                        </div>
-                        
-                        <!-- Título -->
-                        <h2 class="text-xl font-semibold text-[#1b1b18] dark:text-[#EDEDEC] mb-3 line-clamp-2">
-                            {{ post.title }}
-                        </h2>
-                        
-                        <!-- Contenido truncado -->
-                        <p class="text-[#706f6c] dark:text-[#A1A09A] mb-4 line-clamp-3">
-                            {{ post.content.substring(0, 150) }}{{ post.content.length > 150 ? '...' : '' }}
-                        </p>
-                        
-                        <!-- Botón de acción -->
-                        <div class="flex items-center justify-between">
-                            <button class="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors">
-                                {{ post.subscripcion && !userHasActiveSubscription ? 'Ver Premium' : 'Leer más' }}
-                                <svg class="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                </svg>
-                            </button>
-                            
-                            <!-- Indicador de contenido premium -->
-                            <div v-if="post.subscripcion" class="flex items-center text-xs text-yellow-600 dark:text-yellow-400">
-                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                </svg>
-                                Premium
-                            </div>
-                        </div>
-                    </div>
-                </article>
+                    :post="post"
+                    :company-name="companyName"
+                    @open-subscription-modal="openSubscriptionModal"
+                />
             </div>
             
             <!-- Mensaje si no hay publicaciones -->
@@ -250,7 +183,6 @@ const handlePostClick = (post: Post) => {
     :post-title="selectedPostTitle"
     @close="closeSubscriptionModal"
 />
-
 
 </template>
 

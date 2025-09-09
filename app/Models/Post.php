@@ -30,6 +30,14 @@ class Post extends Model
         'updated_at' => 'datetime',
     ];
 
+    /**
+     * Get the route key for the model.
+     */
+    public function getRouteKeyName()
+    {
+        return 'slug';
+    }
+
     // Scopes para filtrar por estado
     public function scopePublished($query)
     {

@@ -229,9 +229,21 @@ class PostController extends Controller
         if ($post->status !== 'published') {
             abort(404);
         }
-
+    
+        // Cargar los tags del post
+        $post->load('tags');
+    
         return Inertia::render('ClientMenu/Posts/Show', [
-            'post' => $post
+            'post' => array_merge($post->toArray(), [
+                'tags' => $post->tags->map(function ($tag) {
+                    return [
+                        'id' => $tag->id,
+                        'name' => $tag->name,
+                        'slug' => $tag->slug,
+                        'color' => $tag->color
+                    ];
+                })
+            ])
         ]);
     }
 

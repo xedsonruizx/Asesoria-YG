@@ -8,18 +8,28 @@ import { ArrowLeft, Calendar, Tag, User, FileText, Image, Video, Download, Lock,
 // Obtener el nombre de la empresa desde las variables de entorno
 const companyName = import.meta.env.VITE_COMPANY_NAME || 'Asesorías YG';
 
-// Definir la interfaz Post
+// Definir la interfaz Post actualizada
 interface Post {
   id: number;
   title: string;
   content: string;
-  category: string;
+  excerpt?: string;
+  slug: string;
+  meta_description?: string;
   status: string;
+  is_premium: boolean;
   image_path?: string;
   file_path?: string;
-  subscripcion: boolean;
+  author_id?: number;
+  published_at?: string;
   created_at: string;
   updated_at: string;
+  tags?: Array<{
+    id: number;
+    name: string;
+    slug: string;
+    color: string;
+  }>;
 }
 
 interface Props {
@@ -54,15 +64,9 @@ const formatDate = (dateString: string) => {
   });
 };
 
-// Función para obtener el color de la categoría
-const getCategoryColor = (category: string) => {
-    const colors = {
-        'Legal': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-        'RRHH': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-        'Finanzas': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-        'Tecnología': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-    };
-    return colors[category] || 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
+// Función para obtener el color de la etiqueta
+const getTagColor = (color: string) => {
+    return color || 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
 };
 
 // Detectar tipo de archivo multimedia
@@ -83,7 +87,7 @@ const fileType = computed(() => props.post.file_path ? getFileType(props.post.fi
 
 // Verificar si el contenido está bloqueado
 const isContentBlocked = computed(() => {
-    return props.post.subscripcion && !userHasActiveSubscription;
+    return props.post.is_premium && !userHasActiveSubscription;
 });
 
 // Función para manejar acceso a contenido premium
@@ -99,14 +103,16 @@ const closeSubscriptionModal = () => {
     showSubscriptionModal.value = false;
 };
 
-// Función para compartir (placeholder)
+// Función para compartir
 const sharePost = () => {
+    const shareData = {
+        title: props.post.title,
+        text: props.post.excerpt || props.post.meta_description || props.post.content.substring(0, 100) + '...',
+        url: window.location.href
+    };
+    
     if (navigator.share) {
-        navigator.share({
-            title: props.post.title,
-            text: props.post.content.substring(0, 100) + '...',
-            url: window.location.href
-        });
+        navigator.share(shareData);
     } else {
         // Fallback: copiar URL al portapapeles
         navigator.clipboard.writeText(window.location.href);
@@ -117,9 +123,9 @@ const sharePost = () => {
 
 <template>
     <Head :title="post.title + ' - ' + companyName">
-        <meta name="description" :content="post.content.substring(0, 160) + '...'" />
+        <meta name="description" :content="post.meta_description || post.excerpt || post.content.substring(0, 160) + '...'" />
         <meta property="og:title" :content="post.title" />
-        <meta property="og:description" :content="post.content.substring(0, 160) + '...'" />
+        <meta property="og:description" :content="post.meta_description || post.excerpt || post.content.substring(0, 160) + '...'" />
         <meta property="og:image" :content="post.image_path" v-if="post.image_path" />
         <link rel="preconnect" href="https://rsms.me/" />
         <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
@@ -155,20 +161,29 @@ const sharePost = () => {
             <article class="bg-white dark:bg-[#161615] rounded-lg shadow-[inset_0px_0px_0px_1px_rgba(26,26,0,0.16)] dark:shadow-[inset_0px_0px_0px_1px_#fffaed2d] overflow-hidden">
                 <!-- Header del artículo -->
                 <div class="p-6 sm:p-8">
+                    <!-- Tags -->
+                    <div v-if="post.tags && post.tags.length > 0" class="flex flex-wrap gap-2 mb-4">
+                        <span 
+                            v-for="tag in post.tags" 
+                            :key="tag.id"
+                            :class="getTagColor(tag.color)"
+                            class="px-3 py-1 rounded-full text-sm font-medium"
+                        >
+                            {{ tag.name }}
+                        </span>
+                    </div>
+                    
                     <!-- Metadatos -->
                     <div class="flex flex-wrap items-center gap-4 mb-6">
-                        <span :class="getCategoryColor(post.category)" class="px-3 py-1 rounded-full text-sm font-medium">
-                            {{ post.category }}
-                        </span>
                         <div class="flex items-center gap-2 text-sm text-[#706f6c] dark:text-[#A1A09A]">
                             <Calendar class="h-4 w-4" />
-                            <span>{{ formatDate(post.created_at) }}</span>
+                            <span>{{ formatDate(post.published_at || post.created_at) }}</span>
                         </div>
                         <div class="flex items-center gap-2 text-sm text-[#706f6c] dark:text-[#A1A09A]">
                             <Eye class="h-4 w-4" />
                             <span>{{ companyName }}</span>
                         </div>
-                        <div v-if="post.subscripcion" class="flex items-center gap-2 text-sm text-yellow-600 dark:text-yellow-400">
+                        <div v-if="post.is_premium" class="flex items-center gap-2 text-sm text-yellow-600 dark:text-yellow-400">
                             <Lock class="h-4 w-4" />
                             <span>Premium</span>
                         </div>
@@ -178,6 +193,11 @@ const sharePost = () => {
                     <h1 class="text-3xl sm:text-4xl font-bold text-[#1b1b18] dark:text-[#EDEDEC] mb-6 leading-tight">
                         {{ post.title }}
                     </h1>
+                    
+                    <!-- Excerpt -->
+                    <div v-if="post.excerpt && !isContentBlocked" class="text-lg text-[#706f6c] dark:text-[#A1A09A] mb-6 font-medium leading-relaxed">
+                        {{ post.excerpt }}
+                    </div>
                 </div>
 
                 <!-- Imagen principal -->
