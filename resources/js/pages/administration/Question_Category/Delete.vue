@@ -2,43 +2,46 @@
 import { ref, computed } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { X, Trash2, Loader2, AlertTriangle, Shield } from 'lucide-vue-next';
-import { destroy } from '@/routes/post-categories';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { destroy } from '@/routes/question-categories';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 
 // Props
-interface TagCategory {
+interface EvaluationCategory {
   id: number;
   name: string;
   slug: string;
   description?: string;
   color?: string;
+  icon?: string;
+  max_score: number;
+  order: number;
   is_active: boolean;
-  posts_count: number;
+  questions_count: number;
 }
 
 const props = defineProps<{
-  category: TagCategory | null;
-  isOpen: boolean;
+  category: EvaluationCategory;
 }>();
 
 // Emits
 const emit = defineEmits<{
-  'update:isOpen': [value: boolean];
-  confirm: [];
+  close: [];
+  deleted: [];
 }>();
 
 const processing = ref(false);
+const isOpen = ref(true);
 
 // Computed para verificar si se puede eliminar
 const canDelete = computed(() => {
-  return props.category ? props.category.posts_count === 0 : false;
+  return props.category.questions_count === 0;
 });
 
 // Función para eliminar la categoría
 const deleteCategory = () => {
-  if (!canDelete.value || !props.category) {
+  if (!canDelete.value) {
     return;
   }
   
@@ -46,7 +49,7 @@ const deleteCategory = () => {
   
   router.delete(destroy(props.category.id).url, {
     onSuccess: () => {
-      emit('confirm');
+      emit('deleted');
       close();
     },
     onFinish: () => {
@@ -57,7 +60,8 @@ const deleteCategory = () => {
 
 // Función para cerrar el modal
 const close = () => {
-  emit('update:isOpen', false);
+  isOpen.value = false;
+  emit('close');
 };
 </script>
 
@@ -67,38 +71,11 @@ const close = () => {
       <DialogHeader>
         <DialogTitle class="text-xl font-semibold text-foreground flex items-center gap-2">
           <AlertTriangle class="w-5 h-5 text-destructive" />
-          Eliminar Categoría de Post
+          Eliminar Categoría de Evaluación
         </DialogTitle>
-        <DialogDescription>
-          Confirma la eliminación de esta categoría de post. Esta acción no se puede deshacer.
-        </DialogDescription>
       </DialogHeader>
       
-      <!-- Mostrar mensaje de error si no hay categoría -->
-      <div v-if="!category" class="space-y-4">
-        <Card class="p-4 border-destructive bg-destructive/5">
-          <div class="flex items-start gap-3">
-            <AlertTriangle class="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
-            <div class="space-y-2">
-              <h4 class="font-semibold text-destructive">
-                Error al cargar la categoría
-              </h4>
-              <p class="text-sm text-destructive/80">
-                No se pudo cargar la información de la categoría. Por favor, intenta nuevamente.
-              </p>
-            </div>
-          </div>
-        </Card>
-        
-        <div class="flex justify-end pt-4 border-t border-border">
-          <Button variant="outline" @click="close">
-            Cerrar
-          </Button>
-        </div>
-      </div>
-      
-      <!-- Contenido normal cuando hay categoría -->
-      <div v-else-if="category" class="space-y-6">
+      <div class="space-y-6">
         <!-- Información de la categoría -->
         <Card class="p-4 bg-muted/30">
           <div class="space-y-2">
@@ -107,11 +84,8 @@ const close = () => {
               {{ category.description }}
             </p>
             <div class="flex items-center gap-4 text-sm text-muted-foreground">
-              <span :class="category.is_active ? 'text-green-600' : 'text-red-600'">
-                {{ category.is_active ? 'Activa' : 'Inactiva' }}
-              </span>
-              <span :class="category.posts_count > 0 ? 'text-destructive font-medium' : 'text-muted-foreground'">
-                {{ category.posts_count }} post(s) asociado(s)
+              <span :class="category.questions_count > 0 ? 'text-destructive font-medium' : 'text-muted-foreground'">
+                {{ category.questions_count }} pregunta(s) asociada(s)
               </span>
             </div>
           </div>
@@ -126,8 +100,8 @@ const close = () => {
                 No se puede eliminar esta categoría
               </h4>
               <p class="text-sm text-destructive/80">
-                Esta categoría tiene <strong>{{ category.posts_count }} post(s)</strong> asociado(s). 
-                Para eliminarla, primero debes eliminar o reasignar todos los posts a otra categoría.
+                Esta categoría tiene <strong>{{ category.questions_count }} pregunta(s)</strong> asociada(s). 
+                Para eliminarla, primero debes eliminar o reasignar todas las preguntas a otra categoría.
               </p>
             </div>
           </div>
@@ -147,28 +121,28 @@ const close = () => {
             </div>
           </div>
         </Card>
-        
-        <!-- Botones de acción -->
-        <div class="flex justify-end space-x-3 pt-4 border-t border-border">
-          <Button
-            variant="outline"
-            @click="close"
-            :disabled="processing"
-          >
-            {{ canDelete ? 'Cancelar' : 'Cerrar' }}
-          </Button>
-          <Button
-            v-if="canDelete"
-            variant="destructive"
-            @click="deleteCategory"
-            :disabled="processing"
-            class="flex items-center gap-2"
-          >
-            <Loader2 v-if="processing" class="w-4 h-4 animate-spin" />
-            <Trash2 v-else class="w-4 h-4" />
-            {{ processing ? 'Eliminando...' : 'Eliminar' }}
-          </Button>
-        </div>
+      </div>
+      
+      <!-- Botones de acción -->
+      <div class="flex justify-end space-x-3 pt-4 border-t border-border">
+        <Button
+          variant="outline"
+          @click="close"
+          :disabled="processing"
+        >
+          {{ canDelete ? 'Cancelar' : 'Cerrar' }}
+        </Button>
+        <Button
+          v-if="canDelete"
+          variant="destructive"
+          @click="deleteCategory"
+          :disabled="processing"
+          class="flex items-center gap-2"
+        >
+          <Loader2 v-if="processing" class="w-4 h-4 animate-spin" />
+          <Trash2 v-else class="w-4 h-4" />
+          {{ processing ? 'Eliminando...' : 'Eliminar' }}
+        </Button>
       </div>
     </DialogContent>
   </Dialog>

@@ -505,15 +505,18 @@ const getDependencyInfoOptimized = (question: Question) => {
                                         >
                                             <Edit class="h-4 w-4" />
                                         </Button>
-                                        <Button 
+                                        <button 
                                             @click="confirmDelete(question)" 
-                                            variant="ghost" 
-                                            size="sm" 
-                                            class="h-8 w-8 p-0 text-destructive hover:text-destructive"
                                             :disabled="!getDependencyInfoOptimized(question).canDelete"
+                                            :class="[
+                                                'inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors border border-input',
+                                                !getDependencyInfoOptimized(question).canDelete
+                                                    ? 'opacity-50 cursor-not-allowed text-muted-foreground'
+                                                    : 'text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20'
+                                            ]"
                                         >
                                             <Trash2 class="h-4 w-4" />
-                                        </Button>
+                                        </button>
                                     </div>
                                 </div>
                                 

@@ -576,14 +576,12 @@ const downloadPdf = (evaluationId: number) => {
                                         >
                                             <Download class="h-4 w-4" />
                                         </Button>
-                                    <Button 
+                                    <button 
                                         @click="confirmDelete(evaluation)" 
-                                        variant="ghost" 
-                                        size="sm" 
-                                        class="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                        class="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors border border-input"
                                     >
                                         <Trash2 class="h-4 w-4" />
-                                    </Button>
+                                    </button>
                                 </div>
                                 
                                 <!-- Acciones en móvil -->

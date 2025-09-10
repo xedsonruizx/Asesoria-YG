@@ -15,9 +15,6 @@ class EvaluationCategory extends Model
         'slug',
         'description',
         'color',
-        'icon',
-        'max_score',
-        'order',
         'is_active',
     ];
 
@@ -29,7 +26,7 @@ class EvaluationCategory extends Model
     {
         return $this->hasMany(EvaluationQuestion::class, 'category_id')
             ->where('is_active', true)
-            ->orderBy('order');
+            ->orderBy('name');
     }
 
     public function scopeActive($query)
@@ -39,7 +36,7 @@ class EvaluationCategory extends Model
 
     public function scopeOrdered($query)
     {
-        return $query->orderBy('order');
+        return $query->orderBy('name');
     }
 
     public function getRouteKeyName(): string

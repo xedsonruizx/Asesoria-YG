@@ -16,7 +16,7 @@ interface PostCategory {
   description?: string;
   color?: string;
   is_active: boolean;
-  posts_count: number;
+  posts_count: number;  // Campo crítico para validación de eliminación
   created_at: string;
   updated_at: string;
   posts?: Post[];
@@ -90,7 +90,6 @@ const openDeleteModal = (category: PostCategory) => {
 const closeModals = () => {
   showCreateModal.value = false;
   showEditModal.value = false;
-  showViewModal.value = false;
   showDeleteModal.value = false;
   selectedCategory.value = null;
 };
@@ -104,12 +103,13 @@ const handleUpdated = () => {
   router.reload();
 };
 
-const handleDeleted = () => {
-  router.reload();
-};
 
 const deleteCategory = (category: PostCategory) => {
-  openDeleteModal(category);
+  openDeleteModal(category);  // Abre modal con categoría seleccionada
+};
+
+const handleDeleted = () => {
+  router.reload();  // Recarga datos después de eliminación
 };
 
 // Funciones de paginación

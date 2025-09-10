@@ -10,6 +10,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\EvaluationController;
 use App\Http\Controllers\EvaluationAdminController;
 use App\Http\Controllers\EvaluationQuestionController;
+use App\Http\Controllers\EvaluationCategoryController; // Agregar esta línea
 
 // ============================================
 // RUTAS PÚBLICAS (SIN AUTENTICACIÓN)
@@ -54,6 +55,10 @@ Route::middleware(['auth'])->group(function () {
         // Resource para categorías de posts
         Route::resource('post-categories', TagCategoryController::class);
         Route::get('api/post-categories', [TagCategoryController::class, 'apiIndex'])->name('api.post-categories.index');
+
+        // Resource para categorías de evaluación
+        Route::resource('question-categories', EvaluationCategoryController::class);
+        Route::get('api/question-categories', [EvaluationCategoryController::class, 'apiIndex'])->name('api.question-categories.index');
 
         // Rutas administrativas para evaluaciones
         Route::resource('evaluations', EvaluationAdminController::class)->names([

@@ -370,15 +370,18 @@ const truncateEmail = (email: string, maxLength: number = 30) => {
                                     <Button @click="editUser(user.id)" variant="outline" size="sm">
                                         <Edit class="w-4 h-4" />
                                     </Button>
-                                    <Button 
+                                    <button 
                                         @click="confirmDelete(user)" 
-                                        :variant="isCurrentUser(user.id) ? 'outline' : 'destructive'" 
                                         :disabled="isCurrentUser(user.id)"
-                                        size="sm"
-                                        :class="isCurrentUser(user.id) ? 'opacity-50 cursor-not-allowed disabled:cursor-not-allowed' : ''  "
+                                        :class="[
+                                            'inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors border border-input',
+                                            isCurrentUser(user.id) 
+                                                ? 'opacity-50 cursor-not-allowed text-muted-foreground' 
+                                                : 'text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20'
+                                        ]"
                                     >
                                         <Trash2 class="w-4 h-4" />
-                                    </Button>
+                                    </button>
                                 </div>
                                 
                                 <!-- Acciones en móvil -->

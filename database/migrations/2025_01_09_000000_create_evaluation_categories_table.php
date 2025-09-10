@@ -14,9 +14,6 @@ return new class extends Migration
             $table->string('slug')->unique(); // rrhh, legal, financiero
             $table->text('description')->nullable();
             $table->string('color', 7)->default('#3B82F6'); // Color hex para UI
-            $table->string('icon')->nullable(); // Icono para UI
-            $table->integer('max_score')->default(100); // Puntaje máximo de la categoría
-            $table->integer('order')->default(0); // Orden de visualización
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
