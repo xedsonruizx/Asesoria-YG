@@ -210,27 +210,7 @@ const formatFileSize = (bytes: number): string => {
 
 // Funciones de formulario
 const submitForm = (status: 'draft' | 'published') => {
-    // Validaciones del lado del cliente
-    if (!form.title.trim()) {
-        alert('El título es obligatorio');
-        return;
-    }
-    
-    if (!form.content.trim()) {
-        alert('El contenido es obligatorio');
-        return;
-    }
-    
-    if (form.tag_categories.length === 0) { // Cambiar de 'form.tags' a 'form.tag_categories'
-        alert('Debe seleccionar al menos un tag');
-        return;
-    }
-    
-    if (!form.meta_description.trim()) {
-        alert('La meta descripción es obligatoria');
-        return;
-    }
-    
+
     form.status = status;
     
     form.post(store().url, {
@@ -467,7 +447,7 @@ const publish = () => submitForm('published');
                 <div class="space-y-6">
                         <!-- Tags -->
                         <div class="rounded-lg border bg-card p-6 shadow-sm">
-                            <h3 class="mb-4 text-lg font-semibold text-card-foreground">Tags de Categoría</h3>
+                            <h3 class="mb-4 text-lg font-semibold text-card-foreground">Etiquetas</h3>
                             
                             <div class="grid gap-4">
                                 <div v-if="props.availableTags.length === 0" class="text-center py-4">

@@ -20,14 +20,14 @@ const mainNavItems: NavItem[] = [
         icon: LayoutGrid,
     },
     {
+        title: 'Tags publicaciones',
+        href: '/tags',
+        icon: Folder,
+    },
+    {
         title: 'Publicaciones',
         href: posts.admin(),
         icon: FileText,
-    },
-    {
-        title: 'Tags',
-        href: '/tags',
-        icon: Folder,
     },
     {
         title: 'usuarios',
