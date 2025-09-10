@@ -34,7 +34,7 @@ const isDeleting = ref(false);
 const confirmDelete = async () => {
   isDeleting.value = true;
   try {
-    emit('confirm', props.post.id);
+    emit('confirm', props.post.slug);
   } finally {
     isDeleting.value = false;
   }

@@ -313,7 +313,7 @@ class PostController extends Controller
         // Eliminar el post de la base de datos
         $post->delete();
     
-        return redirect()->route('posts.index')
+        return redirect()->route('posts.admin')
             ->with('success', 'Publicación y archivos asociados eliminados exitosamente.');
     }
 

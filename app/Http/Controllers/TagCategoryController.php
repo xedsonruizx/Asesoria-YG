@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\TagCategory;
+use App\Http\Requests\StoreTagCategoryRequest;
+use App\Http\Requests\UpdateTagCategoryRequest;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Illuminate\Support\Str;
 
@@ -23,94 +26,124 @@ class TagCategoryController extends Controller
             $query->where('is_active', $request->status === 'active');
         }
 
-        $tags = $query->withCount('posts')
-                     ->orderBy('name')
-                     ->paginate(15)
-                     ->withQueryString();
+        $categories = $query->withCount('posts')
+                           ->orderBy('name')
+                           ->paginate(15)
+                           ->withQueryString();
 
-        return Inertia::render('administration/Tags/Index', [
-            'tags' => $tags,
+        return Inertia::render('administration/Post_category/Index', [
+            'categories' => [
+                'data' => $categories->items(),
+                'current_page' => $categories->currentPage(),
+                'last_page' => $categories->lastPage(),
+                'per_page' => $categories->perPage(),
+                'total' => $categories->total(),
+                'from' => $categories->firstItem() ?? 0,
+                'to' => $categories->lastItem() ?? 0,
+            ],
             'filters' => $request->only(['search', 'status'])
         ]);
     }
 
     public function create()
     {
-        return Inertia::render('administration/Tags/Create');
+        return Inertia::render('administration/Post_category/Create');
     }
 
-    public function store(Request $request)
+    public function store(StoreTagCategoryRequest $request)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:tags_category,name',
-            'slug' => 'nullable|string|max:255|unique:tags_category,slug',
-            'description' => 'nullable|string|max:1000',
-            'color' => 'nullable|string|regex:/^#[0-9A-Fa-f]{6}$/',
-            'is_active' => 'boolean'
-        ]);
+        $validated = $request->validated();
 
         // Generar slug si no se proporciona
         if (empty($validated['slug'])) {
             $validated['slug'] = Str::slug($validated['name']);
+            
+            // Verificar que el slug generado sea único
+            $originalSlug = $validated['slug'];
+            $counter = 1;
+            while (TagCategory::where('slug', $validated['slug'])->exists()) {
+                $validated['slug'] = $originalSlug . '-' . $counter;
+                $counter++;
+            }
         }
 
-        TagCategory::create($validated);
-
-        return redirect()->route('tags.index')
-                        ->with('success', 'Tag creado exitosamente.');
+        try {
+            TagCategory::create($validated);
+            
+            return redirect()->route('post-categories.index')
+                            ->with('success', 'Categoría creada exitosamente.');
+        } catch (\Exception $e) {
+            Log::error('Error al crear categoría: ' . $e->getMessage());
+            
+            return redirect()->back()
+                            ->withInput()
+                            ->with('error', 'Error al crear la categoría. Por favor, inténtalo de nuevo.');
+        }
     }
 
-    public function show(TagCategory $tag)
+    public function show(TagCategory $postCategory)
     {
-        $tag->load(['posts' => function ($query) {
+        $postCategory->load(['posts' => function ($query) {
             $query->latest()->take(10);
         }]);
 
-        return Inertia::render('administration/Tags/Show', [
-            'tag' => $tag
+        return Inertia::render('administration/Post_category/Show', [
+            'category' => $postCategory
         ]);
     }
 
-    public function edit(TagCategory $tag)
+    public function edit(TagCategory $postCategory)
     {
-        return Inertia::render('administration/Tags/Edit', [
-            'tag' => $tag
+        return Inertia::render('administration/Post_category/Edit', [
+            'category' => $postCategory
         ]);
     }
 
-    public function update(Request $request, TagCategory $tag)
+    public function update(UpdateTagCategoryRequest $request, TagCategory $postCategory)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:tags_category,name,' . $tag->id,
-            'slug' => 'nullable|string|max:255|unique:tags_category,slug,' . $tag->id,
-            'description' => 'nullable|string|max:1000',
-            'color' => 'nullable|string|regex:/^#[0-9A-Fa-f]{6}$/',
-            'is_active' => 'boolean'
-        ]);
+        $validated = $request->validated();
 
         // Generar slug si no se proporciona
         if (empty($validated['slug'])) {
             $validated['slug'] = Str::slug($validated['name']);
+            
+            // Verificar que el slug generado sea único (excluyendo el registro actual)
+            $originalSlug = $validated['slug'];
+            $counter = 1;
+            while (TagCategory::where('slug', $validated['slug'])
+                             ->where('id', '!=', $postCategory->id)
+                             ->exists()) {
+                $validated['slug'] = $originalSlug . '-' . $counter;
+                $counter++;
+            }
         }
 
-        $tag->update($validated);
-
-        return redirect()->route('tags.index')
-                        ->with('success', 'Tag actualizado exitosamente.');
+        try {
+            $postCategory->update($validated);
+            
+            return redirect()->route('post-categories.index')
+                            ->with('success', 'Categoría actualizada exitosamente.');
+        } catch (\Exception $e) {
+            Log::error('Error al actualizar categoría: ' . $e->getMessage());
+            
+            return redirect()->back()
+                            ->withInput()
+                            ->with('error', 'Error al actualizar la categoría. Por favor, inténtalo de nuevo.');
+        }
     }
 
-    public function destroy(TagCategory $tag)
+    public function destroy(TagCategory $post_category)  // Cambiar de $postCategory a $post_category
     {
         // Verificar si tiene posts asociados
-        if ($tag->posts()->count() > 0) {
-            return redirect()->route('tags.index')
-                           ->with('error', 'No se puede eliminar el tag porque tiene posts asociados.');
+        if ($post_category->posts()->count() > 0) {
+            return redirect()->route('post-categories.index')
+                           ->with('error', 'No se puede eliminar la categoría porque tiene posts asociados.');
         }
-
-        $tag->delete();
-
-        return redirect()->route('tags.index')
-                        ->with('success', 'Tag eliminado exitosamente.');
+    
+        $post_category->delete();
+    
+        return redirect()->route('post-categories.index')
+                        ->with('success', 'Categoría eliminada exitosamente.');
     }
 
     // API para obtener tags activos (para selects)

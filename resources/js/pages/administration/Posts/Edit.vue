@@ -90,7 +90,7 @@ const isFileDragOver = ref(false);
 
 const breadcrumbs = [
     { title: 'Publicaciones', href: postsAdminIndex().url },
-    { title: props.post.title, href: postShow(props.post.id).url },
+    { title: props.post.title, href: postShow(props.post.slug).url },
     { title: 'Editar Publicación', current: true },
 ];
 
@@ -376,11 +376,11 @@ declare global {
     });
     
     // Usar la ruta POST específica para archivos
-    form.post(`/posts/${props.post.id}/update-with-files`, {
+    form.post(`/posts/${props.post.slug}/update-with-files`, {
         forceFormData: true,
         onSuccess: () => {
             console.log('Formulario enviado exitosamente');
-            router.visit(`/posts/${props.post.id}`);
+            router.visit(postShow(props.post.slug).url);
         },
         onError: (errors) => {
             console.error('Errores de validación:', errors);

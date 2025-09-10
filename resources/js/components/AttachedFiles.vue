@@ -75,7 +75,6 @@
                     Ver
                 </a>
             </div>
-            {{fileUrl}}
             <!-- Archivo adicional -->
             <div v-if="fileUrl" class="space-y-2">
                 <h4 class="text-sm font-medium text-foreground">Archivo adjunto</h4>

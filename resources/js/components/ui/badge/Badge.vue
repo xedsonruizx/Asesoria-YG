@@ -1,4 +1,4 @@
-<!-- <script setup lang="ts">
+<script setup lang="ts">
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
@@ -32,9 +32,6 @@ const badgeVariants = cva(
   }
 )
 
-// 👉 Crear un alias de los VariantProps
-type BadgeVariantProps = VariantProps<typeof badgeVariants>
-
 type BadgeProps = VariantProps<typeof badgeVariants> & {
   class?: string
 }
@@ -46,6 +43,4 @@ const props = defineProps<BadgeProps>()
   <div :class="cn(badgeVariants({ variant: props.variant, size: props.size }), props.class)">
     <slot />
   </div>
-</template> -->
-
-<template></template>
+</template>

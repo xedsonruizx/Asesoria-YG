@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Http\Controllers\PostController;
 use App\Http\Controllers\TagCategoryController;
+use App\Http\Controllers\PostCategoryController; // Agregar esta línea
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\EvaluationController;
@@ -49,6 +50,10 @@ Route::middleware(['auth'])->group(function () {
         // Resource para tags
         Route::resource('tags', TagCategoryController::class);
         Route::get('api/tags', [TagCategoryController::class, 'apiIndex'])->name('api.tags.index');
+        
+        // Resource para categorías de posts
+        Route::resource('post-categories', TagCategoryController::class);
+        Route::get('api/post-categories', [TagCategoryController::class, 'apiIndex'])->name('api.post-categories.index');
 
         // Rutas administrativas para evaluaciones
         Route::resource('evaluations', EvaluationAdminController::class)->names([

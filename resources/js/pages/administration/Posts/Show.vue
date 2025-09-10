@@ -43,7 +43,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
     {
         title: props.post.title,
-        href: postShow(props.post.id).url,
+        href: postShow(props.post.slug).url,
     },
 ];
 
@@ -113,7 +113,7 @@ const handleFileImageError = () => {
 
 // Funciones para las acciones
 const editPost = () => {
-    router.visit(postEdit(props.post.id).url);
+    router.visit(postEdit(props.post.slug).url);
 };
 
 const confirmDelete = () => {

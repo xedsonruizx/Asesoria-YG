@@ -83,7 +83,7 @@ const truncateContent = (content: string, maxLength: number = 100) => {
 
 // Función para navegar a la vista detallada
 const viewPost = (post: Post) => {
-  window.location.href = postShow(post.id).url;
+  window.location.href = postShow(post.slug).url;
 };
 
 // Función para navegar a crear nueva publicación

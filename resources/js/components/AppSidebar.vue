@@ -10,7 +10,7 @@ import questions from '@/routes/questions';
 
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, FileText, UsersRound, ClipboardList, HelpCircle } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, FileText, UsersRound, ClipboardList, HelpCircle, FolderOpen } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
 const mainNavItems: NavItem[] = [
@@ -23,6 +23,11 @@ const mainNavItems: NavItem[] = [
         title: 'Publicaciones',
         href: posts.admin(),
         icon: FileText,
+    },
+    {
+        title: 'Tags',
+        href: '/tags',
+        icon: Folder,
     },
     {
         title: 'usuarios',
