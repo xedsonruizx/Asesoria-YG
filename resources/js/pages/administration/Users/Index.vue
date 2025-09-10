@@ -17,6 +17,7 @@ interface User {
   ispremium: boolean;
   created_at: string;
   updated_at: string;
+  total_evaluation_points?: number; // Agregar esta propiedad
 }
 
 interface UsersData {
@@ -145,6 +146,11 @@ const getPageNumbers = () => {
   const lastPage = props.users?.last_page || 1;
   const pages: number[] = [];
   
+  // Verificar que tenemos datos válidos
+  if (!props.users || !currentPage || !lastPage) {
+    return [];
+  }
+  
   // Mostrar máximo 5 páginas
   let startPage = Math.max(1, currentPage - 2);
   let endPage = Math.min(lastPage, startPage + 4);
@@ -247,7 +253,7 @@ const truncateEmail = (email: string, maxLength: number = 30) => {
                             </button>
                             
                             <!-- Última página si no está visible -->
-                            <template v-if="getPageNumbers()[getPageNumbers().length - 1] < props.users.last_page">
+                            <template v-if="getPageNumbers()?.length && getPageNumbers()[getPageNumbers().length - 1] < props.users.last_page">
                                 <span v-if="getPageNumbers()[getPageNumbers().length - 1] < props.users.last_page - 1" class="text-muted-foreground px-1">...</span>
                                 <button 
                                     @click="goToPage(props.users.last_page)"
@@ -276,11 +282,11 @@ const truncateEmail = (email: string, maxLength: number = 30) => {
                 <div v-if="props.users?.data && props.users.data.length > 0">
                     <!-- Encabezados -->
                     <div class="bg-muted/30 p-4 border-b border-border">
-                        <div class="grid grid-cols-1 md:grid-cols-6 gap-4 font-semibold text-foreground">
-                            <!-- <div class="md:col-span-1">ID</div> -->
+                        <div class="grid grid-cols-1 md:grid-cols-7 gap-4 font-semibold text-foreground">
                             <div class="md:col-span-1">Nombre</div>
                             <div class="md:col-span-2">Email</div>
                             <div class="hidden md:block">Premium</div>
+                            <div class="hidden md:block">Puntos</div>
                             <div class="hidden md:block">Fecha de Registro</div>
                             <div class="hidden md:block">Acciones</div>
                         </div>
@@ -293,12 +299,7 @@ const truncateEmail = (email: string, maxLength: number = 30) => {
                             :key="user.id"
                             class="border-b border-border p-4 hover:bg-muted/50 transition-colors group"
                         >
-                            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-start md:items-center">
-                                <!-- ID -->
-                                <!-- <div class="md:col-span-1">
-                                    <div class="font-semibold text-foreground">#{{ user.id }}</div>
-                                </div> -->
-                                
+                            <div class="grid grid-cols-1 md:grid-cols-6 gap-4 items-start md:items-center">
                                 <!-- Nombre -->
                                 <div class="md:col-span-1 cursor-pointer" @click="viewUser(user)">
                                     <div class="font-semibold text-foreground mb-1 group-hover:text-primary transition-colors flex items-center gap-2">
@@ -317,6 +318,12 @@ const truncateEmail = (email: string, maxLength: number = 30) => {
                                                 {{ user.ispremium ? 'Sí' : 'No' }}
                                             </span>
                                             <Crown v-if="user.ispremium" class="w-3 h-3 text-yellow-500" />
+                                        </div>
+                                        <div class="text-sm text-muted-foreground">
+                                            <strong>Puntos:</strong> 
+                                            <span class="font-medium text-blue-600">
+                                                {{ user.total_evaluation_points || 0 }} pts
+                                            </span>
                                         </div>
                                         <div class="text-sm text-muted-foreground">
                                             <strong>Registrado:</strong> {{ formatDate(user.created_at) }}
@@ -340,6 +347,15 @@ const truncateEmail = (email: string, maxLength: number = 30) => {
                                         ]">
                                             <Crown v-if="user.ispremium" class="w-3 h-3 mr-1" />
                                             {{ user.ispremium ? 'Premium' : 'Estándar' }}
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                <!-- Puntos (solo desktop) -->
+                                <div class="hidden md:block">
+                                    <div class="flex items-center gap-2">
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
+                                            {{ user.total_evaluation_points || 0 }} pts
                                         </span>
                                     </div>
                                 </div>

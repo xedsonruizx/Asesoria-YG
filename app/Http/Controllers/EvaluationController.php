@@ -8,6 +8,7 @@ use App\Models\EvaluationCategory;
 use App\Models\EvaluationQuestion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class EvaluationController extends Controller
@@ -28,65 +29,70 @@ class EvaluationController extends Controller
             ]);
         }
     
+        // Obtener solo respuestas existentes (preguntas con respuesta)
+        $existingAnswers = [];
+        $answeredQuestionIds = [];
+        if ($evaluation->answers()->exists()) {
+            foreach ($evaluation->answers as $answer) {
+                $existingAnswers[$answer->question_id] = $answer->answer_value;
+                $answeredQuestionIds[] = $answer->question_id;
+            }
+        }
+    
         // Si la evaluación ya está completada, mostrar resultados
         if ($evaluation->status === 'completed') {
             $report = $evaluation->generateReport();
             
-            // Agregar el campo is_completed para compatibilidad con el frontend
-            $evaluationData = $evaluation->toArray();
-            $evaluationData['is_completed'] = true;
-            
-            // Preparar los datos de categorías para el frontend
+            // Convertir el formato del backend al formato esperado por el frontend
             $categoryScores = [];
             foreach ($report['categories'] as $category) {
                 $categoryScores[$category['name']] = [
                     'category' => $category['name'],
                     'score' => $category['score'],
-                    'maxScore' => $category['max_score'],
-                    'progress' => $category['percentage']
+                    'maxScore' => $category['total_possible_points'],
+                    'progress' => $category['progress'],
+                    'percentage' => $category['percentage'],
+                    'obtainedPoints' => $category['obtained_points'],
+                    'totalPossiblePoints' => $category['total_possible_points'],
+                    'answeredQuestions' => $category['answered_questions']
                 ];
             }
             
-            return Inertia::render('ClientMenu/Evaluation', [
-                'evaluation' => $evaluationData,
+            // Obtener solo preguntas que tienen respuestas
+            $questionsWithAnswers = EvaluationQuestion::whereIn('id', $answeredQuestionIds)
+                ->where('is_active', true)
+                ->orderBy('order')
+                ->get();
+    
+            $categories = EvaluationCategory::where('is_active', true)->orderBy('order')->get();
+    
+            $finalData = [
+                'evaluation' => $evaluation,
                 'report' => $report,
                 'showResults' => true,
-                'categoryScores' => $categoryScores, // Pasar los puntajes calculados
-                'categories' => [],
-                'questions' => [],
-                'answers' => [],
-            ]);
+                'categoryScores' => $categoryScores,
+                'answers' => $existingAnswers,
+                'categories' => $categories,
+                'questions' => $questionsWithAnswers
+            ];
+            
+            return Inertia::render('ClientMenu/Evaluation', $finalData);
         }
     
-        $categories = EvaluationCategory::active()->ordered()->with('questions')->get();
-        $questions = EvaluationQuestion::active()->ordered()->get()->map(function ($question) {
-            // Asegurar que las opciones sean un array
-            if ($question->options && is_string($question->options)) {
-                $decodedOptions = json_decode($question->options, true);
-                if (json_last_error() === JSON_ERROR_NONE) {
-                    $question->options = $decodedOptions;
-                } else {
-                    // Si falla el JSON decode, mantener como string para manejo en frontend
-                    error_log("Failed to decode options for question {$question->id}: " . json_last_error_msg());
-                }
-            }
-            // Asegurar que show_condition sea un array
-            if ($question->show_condition && is_string($question->show_condition)) {
-                $question->show_condition = json_decode($question->show_condition, true);
-            }
-            return $question;
-        });
-        $answers = $evaluation->answers()->with('question')->get()
-            ->keyBy('question_id')
-            ->map(fn($answer) => $answer->answer_value);
+        // Para evaluaciones en progreso
+        $categories = EvaluationCategory::where('is_active', true)->orderBy('order')->get();
+        $questions = EvaluationQuestion::where('is_active', true)->orderBy('order')->get();
     
-        return Inertia::render('ClientMenu/Evaluation', [
+        $finalData = [
             'evaluation' => $evaluation,
             'categories' => $categories,
             'questions' => $questions,
-            'answers' => $answers,
+            'answers' => $existingAnswers,
             'showResults' => false,
-        ]);
+            'categoryScores' => []
+        ];
+    
+        return Inertia::render('ClientMenu/Evaluation', $finalData);
     }
 
     public function report(Evaluation $evaluation)

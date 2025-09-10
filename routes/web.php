@@ -81,6 +81,9 @@ Route::middleware(['auth'])->group(function () {
             'update' => 'admin.questions.update',
             'destroy' => 'admin.questions.destroy',
         ]);
+        // Agregar estas rutas dentro del grupo de administración
+        Route::patch('/admin/questions/{id}/restore', [EvaluationQuestionController::class, 'restore'])->name('admin.questions.restore');
+        Route::delete('/admin/questions/{id}/force-delete', [EvaluationQuestionController::class, 'forceDelete'])->name('admin.questions.force-delete');
     });
     
     // Rutas que requieren permiso 'guest' (solo ver)

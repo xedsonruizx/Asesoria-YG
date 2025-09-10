@@ -8,6 +8,8 @@ use App\Models\EvaluationQuestion;
 use App\Models\EvaluationCategory;
 use Illuminate\Support\Facades\Log;
 use Exception;
+use App\Http\Requests\StoreEvaluationQuestionRequest;
+use App\Http\Requests\UpdateEvaluationQuestionRequest;
 
 class EvaluationQuestionController extends Controller
 {
@@ -17,6 +19,15 @@ class EvaluationQuestionController extends Controller
     public function index(Request $request)
     {
         $query = EvaluationQuestion::with(['category', 'answers']);
+
+        // Mostrar solo preguntas no eliminadas por defecto
+        if (!$request->has('show_deleted')) {
+            // Las preguntas eliminadas se excluyen automáticamente con SoftDeletes
+        } elseif ($request->show_deleted === 'only') {
+            $query->onlyTrashed();
+        } elseif ($request->show_deleted === 'with') {
+            $query->withTrashed();
+        }
 
         // Aplicar filtros
         if ($request->filled('search')) {
@@ -50,13 +61,9 @@ class EvaluationQuestionController extends Controller
             
             // Asegurar que options sea un array
             if ($question->options && is_string($question->options)) {
-                $question->options = json_decode($question->options, true);
-            }
-            
-            // Agregar información de la pregunta padre si existe
-            if ($question->show_condition && isset($question->show_condition['parent_question_id'])) {
-                $parentQuestion = EvaluationQuestion::find($question->show_condition['parent_question_id']);
-                $question->parent_question = $parentQuestion ? $parentQuestion->question_text : null;
+                $question->options = json_decode($question->options, true) ?: [];
+            } elseif (!$question->options) {
+                $question->options = [];
             }
             
             return $question;
@@ -96,40 +103,35 @@ class EvaluationQuestionController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(StoreEvaluationQuestionRequest $request)
     {
         // Tipos de pregunta que tienen puntos individuales por opción
         $typesWithIndividualPoints = ['select', 'radio', 'checkbox'];
         $hasIndividualPoints = in_array($request->question_type, $typesWithIndividualPoints);
         
-        $request->validate([
-            'category_id' => 'required|exists:evaluation_categories,id',
-            'question_text' => 'required|string|max:500',
-            'question_type' => 'required|in:text,textarea,select,number,checkbox,yes_no,radio',
-            'options' => 'nullable|array',
-            'placeholder' => 'nullable|string|max:255',
-            'min_value' => 'nullable|integer',
-            'max_value' => 'nullable|integer|gte:min_value',
-            // Solo requerir puntos si no tiene puntos individuales
-            'points' => $hasIndividualPoints ? 'nullable|integer|min:0' : 'required|integer|min:1',
-            'show_condition' => 'nullable|array',
-            'validation_rules' => 'nullable|array',
-            'is_required' => 'boolean',
-            'is_active' => 'boolean',
-        ]);
-    
-        // Si tiene puntos individuales, establecer puntos base en 0
-        $questionData = $request->all();
-        if ($hasIndividualPoints) {
-            $questionData['points'] = 0;
-        }
-    
-        // Auto-generar el orden basado en la categoría
-        $nextOrder = EvaluationQuestion::where('category_id', $request->category_id)
-                                      ->max('order') + 1;
+        $questionData = $request->validated();
         
-        $questionData = $request->all();
-        $questionData['order'] = $nextOrder;
+        // Calcular puntos automáticamente si tiene opciones con puntos
+        if ($hasIndividualPoints && !empty($questionData['options'])) {
+            $totalPoints = 0;
+            
+            if ($request->question_type === 'checkbox') {
+                // Para checkboxes, sumar todos los puntos
+                foreach ($questionData['options'] as $option) {
+                    $totalPoints += $option['points'] ?? 0;
+                }
+            } else {
+                // Para select y radio, tomar el máximo
+                foreach ($questionData['options'] as $option) {
+                    $totalPoints = max($totalPoints, $option['points'] ?? 0);
+                }
+            }
+            
+            $questionData['points'] = $totalPoints;
+        } elseif (!$hasIndividualPoints && empty($questionData['points'])) {
+            // Para tipos sin opciones, establecer puntos por defecto
+            $questionData['points'] = 1;
+        }
     
         EvaluationQuestion::create($questionData);
     
@@ -165,11 +167,25 @@ class EvaluationQuestionController extends Controller
             $question->options = [];
         }
         
+        // Asegurar que show_condition sea un array con la estructura correcta
+        if ($question->show_condition && is_string($question->show_condition)) {
+            $question->show_condition = json_decode($question->show_condition, true);
+        }
+        
+        // Si no hay show_condition o está vacío, establecer estructura por defecto
+        if (!$question->show_condition) {
+            $question->show_condition = [
+                'parent_question_id' => null,
+                'operator' => 'equals',
+                'value' => ''
+            ];
+        }
+        
         // Agregar preguntas disponibles para dependencias (excluyendo la pregunta actual y filtrando por categoría)
         $availableQuestions = EvaluationQuestion::where('id', '!=', $id)
             ->where('category_id', $question->category_id)
             ->orderBy('order')
-            ->get(['id', 'question_text']);
+            ->get(['id', 'question_text', 'order']); // Agregar 'order' aquí también
     
         return Inertia::render('administration/Questions/Edit', [
             'question' => $question,
@@ -181,48 +197,71 @@ class EvaluationQuestionController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, EvaluationQuestion $question)
+    public function update(UpdateEvaluationQuestionRequest $request, EvaluationQuestion $question)
     {
         // Tipos de pregunta que tienen puntos individuales por opción
         $typesWithIndividualPoints = ['select', 'radio', 'checkbox'];
         $hasIndividualPoints = in_array($request->question_type, $typesWithIndividualPoints);
         
-        $request->validate([
-            'category_id' => 'required|exists:evaluation_categories,id',
-            'question_text' => 'required|string|max:500',
-            'question_type' => 'required|in:text,textarea,select,number,checkbox,yes_no,radio',
-            'options' => 'nullable|array',
-            'placeholder' => 'nullable|string|max:255',
-            'min_value' => 'nullable|integer',
-            'max_value' => 'nullable|integer|gte:min_value',
-            // Solo requerir puntos si no tiene puntos individuales
-            'points' => $hasIndividualPoints ? 'nullable|integer|min:0' : 'required|integer|min:1',
-            'show_condition' => 'nullable|array',
-            'validation_rules' => 'nullable|array',
-            'is_required' => 'boolean',
-            'is_active' => 'boolean',
-        ]);
-    
-        // Si tiene puntos individuales, establecer puntos base en 0
-        $questionData = $request->all();
+        $questionData = $request->validated();
+        
+        // Verificar si el orden ha cambiado
+        $orderChanged = $question->order != $request->order;
+        $oldOrder = $question->order;
+        
+        // Si tiene puntos individuales, calcular puntos totales
         if ($hasIndividualPoints) {
-            $questionData['points'] = 0;
-        }
-    
-        // Si cambió la categoría, recalcular el orden
-        if ($request->category_id != $question->category_id) {
-            $nextOrder = EvaluationQuestion::where('category_id', $request->category_id)
-                                          ->max('order') + 1;
-            $questionData['order'] = $nextOrder;
-        } else {
-            // Mantener el orden actual si no cambió la categoría
-            $questionData['order'] = $question->order;
+            if ($request->has('options') && is_array($request->options)) {
+                $optionPoints = array_column($request->options, 'points');
+                $optionPoints = array_filter($optionPoints, function($point) {
+                    return is_numeric($point);
+                });
+                
+                if (!empty($optionPoints)) {
+                    // Para checkbox: suma de todos los puntos
+                    // Para select/radio: máximo de los puntos
+                    if ($request->question_type === 'checkbox') {
+                        $totalPoints = array_sum($optionPoints);
+                    } else {
+                        $totalPoints = max($optionPoints);
+                    }
+                    $questionData['points'] = $totalPoints;
+                } else {
+                    $questionData['points'] = 0;
+                }
+            } else {
+                $questionData['points'] = 0;
+            }
         }
     
         $question->update($questionData);
+        
+        // Si el orden cambió, actualizar las dependencias que referencian esta pregunta
+        if ($orderChanged) {
+            $this->updateDependentQuestionsOrder($question->id, $question->category_id);
+        }
     
         return redirect()->route('admin.questions.index')
                        ->with('success', 'Pregunta actualizada exitosamente.');
+    }
+
+    /**
+     * Actualizar el orden mostrado en las preguntas dependientes
+     * Este método se asegura de que las dependencias muestren el orden correcto
+     */
+    private function updateDependentQuestionsOrder($questionId, $categoryId)
+    {
+        // No necesitamos actualizar la base de datos ya que las dependencias
+        // se basan en parent_question_id, pero podemos invalidar cache si existe
+        // o realizar otras operaciones necesarias para la sincronización
+        
+        // Log para debugging
+        \Log::info("Orden actualizado para pregunta ID: {$questionId} en categoría: {$categoryId}");
+        
+        // Aquí podrías agregar lógica adicional como:
+        // - Invalidar cache de preguntas
+        // - Notificar a otros servicios
+        // - Actualizar índices de búsqueda
     }
 
     /**
@@ -232,16 +271,42 @@ class EvaluationQuestionController extends Controller
     {
         $question = EvaluationQuestion::findOrFail($id);
         
+        // Usar soft delete en lugar de eliminación física
+        $question->delete();
+    
+        return redirect()->route('admin.questions.index')
+            ->with('success', 'Pregunta eliminada exitosamente. Seguirá apareciendo en reportes existentes.');
+    }
+    
+    /**
+     * Restaurar una pregunta eliminada
+     */
+    public function restore(string $id)
+    {
+        $question = EvaluationQuestion::withTrashed()->findOrFail($id);
+        $question->restore();
+    
+        return redirect()->route('admin.questions.index')
+            ->with('success', 'Pregunta restaurada exitosamente.');
+    }
+    
+    /**
+     * Eliminar permanentemente una pregunta
+     */
+    public function forceDelete(string $id)
+    {
+        $question = EvaluationQuestion::withTrashed()->findOrFail($id);
+        
         // Verificar si la pregunta tiene respuestas asociadas
         if ($question->answers()->count() > 0) {
             return redirect()->route('admin.questions.index')
-                ->with('error', 'No se puede eliminar la pregunta porque tiene respuestas asociadas.');
+                ->with('error', 'No se puede eliminar permanentemente la pregunta porque tiene respuestas asociadas.');
         }
-
-        $question->delete();
-
+    
+        $question->forceDelete();
+    
         return redirect()->route('admin.questions.index')
-            ->with('success', 'Pregunta eliminada exitosamente.');
+            ->with('success', 'Pregunta eliminada permanentemente.');
     }
 
     /**
@@ -287,13 +352,14 @@ class EvaluationQuestionController extends Controller
             
             $query = EvaluationQuestion::where('category_id', $categoryId)
                 ->where('is_active', true)
-                ->orderBy('order');
+                ->orderBy('order'); // Esto asegura que siempre se ordene por el campo 'order' actualizado
             
             if ($excludeId) {
                 $query->where('id', '!=', $excludeId);
             }
             
-            $questions = $query->get(['id', 'question_text']);
+            // Asegurar que siempre se incluya el campo 'order' actualizado
+            $questions = $query->get(['id', 'question_text', 'order']);
             
             return response()->json($questions);
         } catch (Exception $e) {

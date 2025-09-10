@@ -195,27 +195,23 @@ class EvaluationAdminController extends Controller
         $companyName = config('app.company_name', 'Asesorías YG');
         
         // Agrupar preguntas y respuestas por categoría con puntos obtenidos
+        // En el método generatePDF, modificar la consulta para incluir preguntas eliminadas
         $questionsByCategory = [];
-        foreach ($evaluation->answers as $answer) {
-            $categoryName = $answer->question->category->name;
-            if (!isset($questionsByCategory[$categoryName])) {
-                $questionsByCategory[$categoryName] = [];
+        foreach ($report['questions'] as $item) {
+            // Usar withTrashed() para incluir preguntas eliminadas en reportes
+            $question = EvaluationQuestion::withTrashed()->find($item['question_id']);
+            if ($question) {
+                $answer = EvaluationAnswer::where('evaluation_id', $evaluation->id)
+                    ->where('question_id', $item['question_id'])
+                    ->first();
+                
+                $questionsByCategory[$question->category->name][] = [
+                    'question' => $question->question_text,
+                    'answer' => $item['answer'] ?? 'Sin respuesta',
+                    'points' => $answer->points_earned ?? 0,
+                    'question_type' => $answer->question->question_type
+                ];
             }
-            
-            // Formatear la respuesta según el tipo
-            $formattedAnswer = $answer->answer_value;
-            if (is_array($formattedAnswer)) {
-                $formattedAnswer = implode(', ', $formattedAnswer);
-            } elseif (is_bool($formattedAnswer)) {
-                $formattedAnswer = $formattedAnswer ? 'Sí' : 'No';
-            }
-            
-            $questionsByCategory[$categoryName][] = [
-                'question' => $answer->question->question_text,
-                'answer' => $formattedAnswer,
-                'points' => $answer->points_earned ?? 0,
-                'question_type' => $answer->question->question_type
-            ];
         }
     
         $pdf = Pdf::loadView('pdf.evaluation-report', [

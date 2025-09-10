@@ -38,6 +38,7 @@ interface QuestionForm {
   min_value: number | null;
   max_value: number | null;
   points: number;
+  order: number;
   show_condition: any;
   validation_rules: any;
   is_required: boolean;
@@ -65,10 +66,11 @@ const form = useForm<QuestionForm>({
   min_value: null,
   max_value: null,
   points: 1,
+  order: 1,
   show_condition: {
     parent_question_id: null,
     operator: 'equals',
-    value: ''
+    value: null
   },
   validation_rules: null,
   is_required: true,
@@ -115,6 +117,28 @@ const goBack = () => {
 
 const availableQuestions = ref<Question[]>([]);
 
+// Función para obtener el próximo orden automáticamente
+const getNextOrder = async (categoryId: number) => {
+  if (!categoryId) {
+    form.order = 1;
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/admin/questions/next-order?category_id=${categoryId}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    form.order = data.next_order;
+  } catch (error) {
+    console.error('Error getting next order:', error);
+    form.order = 1; // Valor por defecto en caso de error
+  }
+};
+
 // Función para cargar preguntas por categoría
 const loadQuestionsByCategory = async (categoryId: number) => {
   if (!categoryId) {
@@ -139,16 +163,21 @@ const loadQuestionsByCategory = async (categoryId: number) => {
   } catch (error) {
     console.error('Error loading questions:', error);
     availableQuestions.value = [];
-    // Opcional: mostrar mensaje de error al usuario
   }
 };
 
-// Watcher para cargar preguntas cuando cambie la categoría
+// Watcher para cargar preguntas y obtener próximo orden cuando cambie la categoría
 watch(() => form.category_id, (newCategoryId) => {
-  if (newCategoryId && hasDependency.value) {
-    loadQuestionsByCategory(newCategoryId);
+  if (newCategoryId) {
+    // Obtener el próximo orden automáticamente
+    getNextOrder(newCategoryId);
+    
+    if (hasDependency.value) {
+      loadQuestionsByCategory(newCategoryId);
+    }
   } else {
     availableQuestions.value = [];
+    form.order = 1;
   }
   // Limpiar la pregunta padre seleccionada al cambiar categoría
   form.show_condition.parent_question_id = null;
@@ -160,6 +189,12 @@ watch(hasDependency, (newValue) => {
     loadQuestionsByCategory(form.category_id);
   } else {
     availableQuestions.value = [];
+    // Limpiar los datos de dependencia cuando se desmarca
+    form.show_condition = {
+      parent_question_id: null,
+      operator: 'equals',
+      value: null
+    };
   }
 });
 </script>
@@ -236,10 +271,11 @@ watch(hasDependency, (newValue) => {
                     <option value="radio">Selección única (radio buttons)</option>
                     <option value="number">Número</option>
                     <option value="checkbox">Selección múltiple (checkboxes)</option>
-                    <!-- <option value="yes_no">Sí/No</option> -->
                   </select>
                   <InputError :message="form.errors.question_type" />
                 </div>
+
+
 
                 <!-- Campos específicos del tipo de pregunta -->
                 <QuestionTypeInputs
@@ -252,6 +288,7 @@ watch(hasDependency, (newValue) => {
                   @update:options="form.options = $event"
                   @update:min-value="form.min_value = $event"
                   @update:max-value="form.max_value = $event"
+                  @update:totalPoints="updateTotalPoints"
                   :errors="form.errors"
                 />
 
@@ -268,7 +305,24 @@ watch(hasDependency, (newValue) => {
                   />
                   <InputError :message="form.errors.points" />
                 </div>
-                <!-- Removemos completamente la sección del campo orden -->
+
+                <!-- Orden -->
+                <div>
+                  <Label for="order">Orden *</Label>
+                  <Input 
+                    id="order"
+                    v-model.number="form.order"
+                    type="number"
+                    min="1"
+                    required
+                  />
+                  <InputError :message="form.errors.order" />
+                  <p class="text-sm text-muted-foreground mt-1">
+                    El orden debe ser único dentro de la categoría seleccionada
+                  </p>
+                </div>
+
+
 
                 <!-- Dependencias de pregunta -->
                 <QuestionDependency
@@ -338,3 +392,22 @@ watch(hasDependency, (newValue) => {
     </div>
   </AppLayout>
 </template>
+
+// Agregar función para actualizar puntos totales
+const updateTotalPoints = (totalPoints: number) => {
+  // Solo actualizar puntos automáticamente para tipos con opciones
+  if (['select', 'radio', 'checkbox'].includes(form.question_type)) {
+    form.points = totalPoints;
+  }
+};
+
+// Watcher para resetear puntos cuando cambie el tipo de pregunta
+watch(() => form.question_type, (newType) => {
+  if (['select', 'radio', 'checkbox'].includes(newType)) {
+    // Para tipos con opciones, los puntos se calcularán automáticamente
+    form.points = 0;
+  } else {
+    // Para otros tipos, establecer puntos por defecto
+    form.points = 1;
+  }
+});

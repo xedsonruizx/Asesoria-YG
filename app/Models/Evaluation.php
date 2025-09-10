@@ -94,25 +94,41 @@ class Evaluation extends Model
             'recommendations' => [],
         ];
     
-        $maxTotalScore = 0; // Agregar esta línea
+        $maxTotalScore = 0;
         
         foreach ($categories as $category) {
+            // Obtener solo las respuestas de esta categoría
+            $categoryAnswers = $this->answers()
+                ->whereHas('question', fn($q) => $q->where('category_id', $category->id))
+                ->with('question')
+                ->get();
+            
+            // Calcular puntos obtenidos y puntos totales posibles solo de preguntas respondidas
+            $obtainedPoints = $categoryAnswers->sum('points_earned');
+            $totalPossiblePoints = $categoryAnswers->sum(function($answer) {
+                return $answer->question->points ?? 0;
+            });
+            
+            // Calcular porcentaje basado solo en preguntas con respuesta
+            $percentage = $totalPossiblePoints > 0 ? round(($obtainedPoints / $totalPossiblePoints) * 100, 1) : 0;
+            
             $categoryScore = $this->category_scores[$category->slug] ?? 0;
             $categoryProgress = $this->category_progress[$category->slug] ?? 0;
-            $maxScore = $category->max_score;
-            $percentage = $maxScore > 0 ? round(($categoryScore / $maxScore) * 100) : 0;
             
-            $maxTotalScore += $maxScore; // Agregar esta línea
+            $maxTotalScore += $totalPossiblePoints;
     
             $report['categories'][] = [
                 'name' => $category->name,
                 'slug' => $category->slug,
                 'score' => $categoryScore,
-                'max_score' => $maxScore,
+                'max_score' => $totalPossiblePoints,
                 'percentage' => $percentage,
                 'progress' => $categoryProgress,
                 'color' => $category->color,
                 'status' => $this->getCategoryStatus($percentage),
+                'obtained_points' => $obtainedPoints,
+                'total_possible_points' => $totalPossiblePoints,
+                'answered_questions' => $categoryAnswers->count()
             ];
     
             // Generar recomendaciones basadas en el puntaje
@@ -131,10 +147,17 @@ class Evaluation extends Model
             }
         }
     
-        // Agregar los campos faltantes
-        $report['max_total_score'] = $maxTotalScore;
-        $report['total_percentage'] = $maxTotalScore > 0 ? round(($this->total_score / $maxTotalScore) * 100, 1) : 0;
-
+        // Calcular porcentaje total basado en todas las preguntas respondidas
+        $totalObtainedPoints = $this->answers()->sum('points_earned');
+        $totalPossiblePointsAll = $this->answers()->with('question')->get()->sum(function($answer) {
+            return $answer->question->points ?? 0;
+        });
+        
+        $report['max_total_score'] = $totalPossiblePointsAll;
+        $report['total_percentage'] = $totalPossiblePointsAll > 0 ? round(($totalObtainedPoints / $totalPossiblePointsAll) * 100, 1) : 0;
+        $report['total_obtained_points'] = $totalObtainedPoints;
+        $report['total_possible_points'] = $totalPossiblePointsAll;
+    
         return $report;
     }
 

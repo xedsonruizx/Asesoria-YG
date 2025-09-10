@@ -22,11 +22,16 @@
         Resultados de su Evaluación
       </h1>
 
-      <!-- Círculos de progreso por categoría -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-12 mb-12">
-        <!-- Recursos Humanos -->
-        <div class="text-center">
-          <h2 class="text-blue-400 text-xl font-semibold mb-6">Recursos Humanos</h2>
+      <!-- Círculos de progreso por categoría (dinámico) -->
+      <div class="grid gap-12 mb-12" :class="{
+        'grid-cols-1': visibleCategories.length === 1,
+        'grid-cols-1 md:grid-cols-2': visibleCategories.length === 2,
+        'grid-cols-1 md:grid-cols-2 lg:grid-cols-3': visibleCategories.length >= 3
+      }">
+        <div v-for="(category, index) in visibleCategories" :key="category.id" class="text-center">
+          <h2 class="text-xl font-semibold mb-6" :style="{ color: getCategoryColor(category, index) }">
+            {{ category.name }}
+          </h2>
           <div class="relative inline-flex items-center justify-center">
             <!-- Círculo de progreso -->
             <svg class="w-48 h-48 transform -rotate-90" viewBox="0 0 100 100">
@@ -44,88 +49,44 @@
                 cx="50"
                 cy="50"
                 r="40"
-                :stroke="getColorByScore(rhScore)"
+                :stroke="getColorByScore(getCategoryPercentage(category.name))"
                 stroke-width="8"
                 fill="none"
                 stroke-linecap="round"
                 :stroke-dasharray="circumference"
-                :stroke-dashoffset="circumference - (rhScore / 100) * circumference"
+                :stroke-dashoffset="circumference - (getCategoryPercentage(category.name) / 100) * circumference"
                 class="transition-all duration-1000 ease-out"
               />
             </svg>
             <!-- Porcentaje en el centro -->
             <div class="absolute inset-0 flex items-center justify-center">
-              <span class="text-white text-4xl font-bold">{{ rhScore }}%</span>
+              <span class="text-white text-4xl font-bold">{{ getCategoryPercentage(category.name) }}%</span>
             </div>
           </div>
           <div class="mt-4">
-            <h3 :class="getStatusClass(rhScore)" class="text-lg font-semibold mb-2">
-              {{ getStatusText(rhScore, 'RRHH') }}
+            <h3 :class="getStatusClass(getCategoryPercentage(category.name))" class="text-lg font-semibold mb-2">
+              {{ getStatusText(getCategoryPercentage(category.name), category.name) }}
             </h3>
             <p class="text-gray-400 text-sm">
-              {{ getStatusDescription(rhScore, 'RRHH') }}
-            </p>
-          </div>
-        </div>
-
-        <!-- Legal -->
-        <div class="text-center">
-          <h2 class="text-purple-400 text-xl font-semibold mb-6">Legal</h2>
-          <div class="relative inline-flex items-center justify-center">
-            <!-- Círculo de progreso -->
-            <svg class="w-48 h-48 transform -rotate-90" viewBox="0 0 100 100">
-              <!-- Círculo de fondo -->
-              <circle
-                cx="50"
-                cy="50"
-                r="40"
-                stroke="#374151"
-                stroke-width="8"
-                fill="none"
-              />
-              <!-- Círculo de progreso -->
-              <circle
-                cx="50"
-                cy="50"
-                r="40"
-                :stroke="getColorByScore(legalScore)"
-                stroke-width="8"
-                fill="none"
-                stroke-linecap="round"
-                :stroke-dasharray="circumference"
-                :stroke-dashoffset="circumference - (legalScore / 100) * circumference"
-                class="transition-all duration-1000 ease-out"
-              />
-            </svg>
-            <!-- Porcentaje en el centro -->
-            <div class="absolute inset-0 flex items-center justify-center">
-              <span class="text-white text-4xl font-bold">{{ legalScore }}%</span>
-            </div>
-          </div>
-          <div class="mt-4">
-            <h3 :class="getStatusClass(legalScore)" class="text-lg font-semibold mb-2">
-              {{ getStatusText(legalScore, 'LEGAL') }}
-            </h3>
-            <p class="text-gray-400 text-sm">
-              {{ getStatusDescription(legalScore, 'LEGAL') }}
+              {{ getStatusDescription(getCategoryPercentage(category.name), category.name) }}
             </p>
           </div>
         </div>
       </div>
 
-      <!-- Estadísticas resumidas -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+      <!-- Estadísticas resumidas (dinámico) -->
+      <div class="grid gap-6 mb-12" :class="{
+        'grid-cols-1 md:grid-cols-2': visibleCategories.length === 1,
+        'grid-cols-1 md:grid-cols-3': visibleCategories.length === 2,
+        'grid-cols-2 md:grid-cols-4': visibleCategories.length >= 3
+      }">
         <div class="bg-gray-800 rounded-lg p-6 text-center">
           <div class="text-white text-3xl font-bold mb-2">{{ totalQuestions }}</div>
           <div class="text-gray-400 text-sm">Preguntas respondidas</div>
         </div>
-        <div class="bg-gray-800 rounded-lg p-6 text-center">
-          <div class="text-white text-3xl font-bold mb-2">{{ rhScore }}%</div>
-          <div class="text-gray-400 text-sm">Puntaje RRHH</div>
-        </div>
-        <div class="bg-gray-800 rounded-lg p-6 text-center">
-          <div class="text-white text-3xl font-bold mb-2">{{ legalScore }}%</div>
-          <div class="text-gray-400 text-sm">Puntaje Legal</div>
+        <div v-for="category in visibleCategories" :key="`stat-${category.id}`" class="bg-gray-800 rounded-lg p-6 text-center">
+          <div class="text-white text-3xl font-bold mb-2">{{ getCategoryPercentage(category.name) }}%</div>
+          <div class="text-gray-400 text-sm">Puntaje {{ category.name }}</div>
         </div>
       </div>
 
@@ -161,9 +122,23 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+interface Category {
+  id: number
+  name: string
+  slug: string
+  color?: string
+}
+
+interface CategoryScore {
+  category: string
+  score: number
+  maxScore: number
+  progress: number
+}
+
 interface Props {
-  rhScore: number
-  legalScore: number
+  categories: Category[]
+  categoryScores: Record<string, CategoryScore>
   totalQuestions: number
 }
 
@@ -174,6 +149,29 @@ interface Emits {
 
 const props = defineProps<Props>()
 defineEmits<Emits>()
+
+// Filtrar categorías que tienen preguntas respondidas (score > 0)
+const visibleCategories = computed(() => {
+  return props.categories.filter(category => {
+    const categoryScore = props.categoryScores[category.name]
+    return categoryScore && categoryScore.score > 0
+  })
+})
+
+// Calcular el porcentaje para cada categoría
+const getCategoryPercentage = (categoryName: string): number => {
+  const categoryScore = props.categoryScores[categoryName]
+  if (!categoryScore || categoryScore.maxScore === 0) return 0
+  return Math.round((categoryScore.score / categoryScore.maxScore) * 100)
+}
+
+// Obtener el color de la categoría o uno por defecto
+const getCategoryColor = (category: Category, index: number): string => {
+  if (category.color) return category.color
+  // Colores por defecto si no se especifica
+  const defaultColors = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444']
+  return defaultColors[index % defaultColors.length]
+}
 
 // Circunferencia del círculo para el cálculo del stroke-dasharray
 const circumference = computed(() => 2 * Math.PI * 40)
@@ -193,26 +191,20 @@ const getStatusClass = (score: number): string => {
 }
 
 // Función para obtener el texto del estado
-const getStatusText = (score: number, category: string): string => {
-  if (score >= 70) return `Excelente situación en ${category}`
-  if (score >= 50) return `Situación mejorable en ${category}`
-  return `Requiere atención en ${category}`
+const getStatusText = (score: number, categoryName: string): string => {
+  if (score >= 70) return `Excelente situación en ${categoryName}`
+  if (score >= 50) return `Situación mejorable en ${categoryName}`
+  return `Requiere atención en ${categoryName}`
 }
 
 // Función para obtener la descripción del estado
-const getStatusDescription = (score: number, category: string): string => {
+const getStatusDescription = (score: number, categoryName: string): string => {
   if (score >= 70) {
-    return category === 'RRHH' 
-      ? 'Su situación en RRHH está muy bien estructurada.'
-      : 'Su situación en LEGAL está muy bien estructurada.'
+    return `Su situación en ${categoryName} está muy bien estructurada.`
   }
   if (score >= 50) {
-    return category === 'RRHH'
-      ? 'Hay aspectos en RRHH que podrían mejorarse.'
-      : 'Hay aspectos en LEGAL que podrían mejorarse.'
+    return `Hay aspectos en ${categoryName} que podrían mejorarse.`
   }
-  return category === 'RRHH'
-    ? 'Hay aspectos críticos en RRHH que requieren atención inmediata.'
-    : 'Hay aspectos críticos en LEGAL que requieren atención inmediata.'
+  return `Hay aspectos críticos en ${categoryName} que requieren atención inmediata.`
 }
 </script>

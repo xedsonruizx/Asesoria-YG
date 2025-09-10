@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class EvaluationQuestion extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'category_id',
@@ -33,6 +34,7 @@ class EvaluationQuestion extends Model
         'validation_rules' => 'array',
         'is_required' => 'boolean',
         'is_active' => 'boolean',
+        'deleted_at' => 'datetime',
     ];
 
     /**
@@ -70,5 +72,21 @@ class EvaluationQuestion extends Model
     public function scopeOrdered($query)
     {
         return $query->orderBy('order');
+    }
+
+    /**
+     * Scope para incluir preguntas eliminadas (para reportes)
+     */
+    public function scopeWithDeleted($query)
+    {
+        return $query->withTrashed();
+    }
+
+    /**
+     * Scope para obtener solo preguntas eliminadas
+     */
+    public function scopeOnlyDeleted($query)
+    {
+        return $query->onlyTrashed();
     }
 }

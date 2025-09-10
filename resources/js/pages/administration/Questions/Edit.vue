@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted  } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Save, ArrowLeft, Plus, Minus } from 'lucide-vue-next';
@@ -74,8 +74,8 @@ const props = withDefaults(defineProps<Props>(), {
     availableQuestions: () => []
 });
 
-// Variable reactiva para manejar dependencias
-const hasDependency = ref(!!props.question.show_condition?.parent_question_id);
+// Variable reactiva para manejar dependencias - CORREGIR ESTA LÍNEA
+const hasDependency = ref(false); // Inicializar como false temporalmente
 
 // Función para convertir opciones al formato correcto
 const convertOptionsToCorrectFormat = (options: any): QuestionOption[] => {
@@ -123,7 +123,7 @@ const form = useForm<QuestionForm>({
     points: props.question.points,
     order: props.question.order,
     show_condition: props.question.show_condition || {
-        parent_question_id: undefined,
+        parent_question_id: null,
         operator: 'equals',
         value: ''
     },
@@ -132,6 +132,32 @@ const form = useForm<QuestionForm>({
     is_active: props.question.is_active
 });
 
+// Verificar y actualizar hasDependency después de inicializar el form
+console.log('Debug - Question data:', {
+    show_condition: props.question.show_condition,
+    form_show_condition: form.show_condition,
+    parent_question_id: form.show_condition?.parent_question_id
+});
+
+// DEBUG: Agregar console.log temporal para verificar los datos
+console.log('Question data:', {
+  show_condition: props.question.show_condition,
+  parent_question_id: props.question.show_condition?.parent_question_id,
+  hasDependency: hasDependency.value
+});
+
+
+
+
+// Establecer hasDependency basándose en el form inicializado
+if (form.show_condition?.parent_question_id && 
+    form.show_condition.parent_question_id !== null && 
+    form.show_condition.parent_question_id !== undefined) {
+    hasDependency.value = true;
+    console.log('Debug - Setting hasDependency to true');
+} else {
+    console.log('Debug - hasDependency remains false');
+}
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Preguntas', href: '/admin/questions' },
     { title: 'Editar Pregunta', current: true },
@@ -218,19 +244,49 @@ watch(hasDependency, (newValue) => {
     loadQuestionsByCategory(form.category_id);
   } else {
     availableQuestions.value = [];
+    // Limpiar los datos de dependencia cuando se desmarca
+    form.show_condition = {
+      parent_question_id: null,
+      operator: 'equals',
+      value: null
+    };
   }
 });
 
 // Cargar preguntas al montar el componente si ya hay dependencia
-if (hasDependency.value && form.category_id) {
-  loadQuestionsByCategory(form.category_id);
-}
+onMounted(() => {
+  console.log('Mounting Edit component', {
+    hasDependency: hasDependency.value,
+    categoryId: form.category_id,
+    showCondition: form.show_condition,
+    originalQuestion: props.question
+  });
+  
+  if (hasDependency.value && form.category_id) {
+    loadQuestionsByCategory(form.category_id);
+  }
+});
 
-// Remover todas las funciones relacionadas con dependencias:
-// - loadQuestionsByCategory
-// - watchers de category_id y hasDependency
-// - availableQuestions
-// - la carga inicial de preguntas
+
+// DEBUG: Agregar console.log temporal para verificar los datos
+console.log('Question data:', {
+  show_condition: props.question.show_condition,
+  parent_question_id: props.question.show_condition?.parent_question_id,
+  hasDependency: hasDependency.value
+});
+
+
+// Agregar función para actualizar puntos totales
+const updateTotalPoints = (totalPoints: number) => {
+  form.points = totalPoints;
+};
+
+// Watcher para resetear puntos cuando cambia el tipo de pregunta
+watch(() => form.question_type, () => {
+  if (!['select', 'radio', 'checkbox'].includes(form.question_type)) {
+    form.points = 1;
+  }
+});
 </script>
 
 <template>
@@ -294,8 +350,7 @@ if (hasDependency.value && form.category_id) {
                                 <!-- Tipo de pregunta -->
                                 <div>
                                     <Label for="question_type">Tipo de Pregunta *</Label>
-                                    <select
-                                        disabled 
+                                    <select 
                                         id="question_type"
                                         v-model="form.question_type"
                                         class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -307,10 +362,11 @@ if (hasDependency.value && form.category_id) {
                                         <option value="radio">Selección única (radio buttons)</option>
                                         <option value="number">Número</option>
                                         <option value="checkbox">Selección múltiple (checkboxes)</option>
-                                        <!-- <option value="yes_no">Sí/No</option> -->
                                     </select>
                                     <InputError :message="form.errors.question_type" />
                                 </div>
+
+                              
 
                                 <!-- Campos específicos del tipo de pregunta -->
                                 <QuestionTypeInputs
@@ -319,11 +375,12 @@ if (hasDependency.value && form.category_id) {
                                     :options="form.options"
                                     :min-value="form.min_value"
                                     :max-value="form.max_value"
-                                    :errors="form.errors"
                                     @update:placeholder="form.placeholder = $event"
                                     @update:options="form.options = $event"
                                     @update:min-value="form.min_value = $event"
                                     @update:max-value="form.max_value = $event"
+                                    @update:totalPoints="updateTotalPoints"
+                                    :errors="form.errors"
                                 />
 
                                 <!-- Puntos y orden -->
@@ -349,6 +406,24 @@ if (hasDependency.value && form.category_id) {
                                     </div>
                                 </div>
 
+                                <!-- Orden -->
+                                <div>
+                                    <Label for="order">Orden *</Label>
+                                    <Input 
+                                        id="order"
+                                        v-model.number="form.order"
+                                        type="number"
+                                        min="1"
+                                        required
+                                    />
+                                    <InputError :message="form.errors.order" />
+                                    <p class="text-sm text-muted-foreground mt-1">
+                                        El orden debe ser único dentro de la categoría seleccionada
+                                    </p>
+                                </div>
+
+
+
                                 <!-- Dependencias de pregunta -->
                                 <div class="space-y-4 border-t border-border pt-4">
                                     <h4 class="font-medium text-foreground">Dependencias</h4>
@@ -373,7 +448,7 @@ if (hasDependency.value && form.category_id) {
                                             >
                                                 <option :value="null">Seleccionar pregunta</option>
                                                 <option v-for="question in availableQuestions" :key="question.id" :value="question.id">
-                                                    {{ question.question_text }}
+                                                    Orden {{ question.order }} - {{ question.question_text }}
                                                 </option>
                                             </select>
                                             <InputError :message="form.errors['show_condition.parent_question_id']" />
@@ -482,3 +557,6 @@ if (hasDependency.value && form.category_id) {
         </div>
     </AppLayout>
 </template>
+
+
+

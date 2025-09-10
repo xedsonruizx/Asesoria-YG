@@ -167,14 +167,13 @@ onMounted(() => {
         </div> -->
         <select 
           id="parent_question"
-          :value="showCondition.parent_question_id || ''"
-          @input="updateParentQuestionId(($event.target as HTMLSelectElement).value ? Number(($event.target as HTMLSelectElement).value) : null)"
+          :value="condition.parent_question_id"
+          @change="updateParentQuestionId($event.target.value ? parseInt($event.target.value) : null)"
           class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          :disabled="loading"
         >
-          <option value="">{{ loading ? 'Cargando...' : 'Seleccionar pregunta' }}</option>
+          <option :value="null">Seleccionar pregunta</option>
           <option v-for="question in availableQuestions" :key="question.id" :value="question.id">
-            {{ question.question_text }}
+            Orden {{ question.order }} - {{ question.question_text }}
           </option>
         </select>
         <InputError :message="errors['show_condition.parent_question_id']" />

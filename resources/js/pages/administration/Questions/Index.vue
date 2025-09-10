@@ -177,12 +177,12 @@ const questionDependencyInfo = computed(() => {
         let canDelete = true;
         
         // Si tiene respuestas asociadas (otras preguntas dependen de esta)
-        const dependents = props.questions.filter(q =>
+        const dependents = props.questions?.filter(q =>
             q.show_condition &&
             q.show_condition.parent_question_id === question.id
-        );
+        ) || [];
 
-        if (dependents.length > 0) {
+        if (dependents && dependents.length > 0) {
             // Mostrar los números de orden de las preguntas que dependen de esta
             const dependentOrders = dependents.map(q => q.order).sort((a, b) => a - b);
             dependencies.push({
@@ -239,7 +239,7 @@ const questionDependencyInfo = computed(() => {
                 }
                 
                 dependencies.push({
-                    text: `Depende de: Orden ${parentOrder} - "${parentText}" ${operatorText} ${displayValue}`,
+                    text: `Depende de: Orden ${parentOrder}`,
                     class: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300'
                 });
             }
@@ -247,7 +247,7 @@ const questionDependencyInfo = computed(() => {
         
         // Determinar el resultado final
         let result;
-        if (dependencies.length === 0) {
+        if (!dependencies || dependencies.length === 0) {
             result = {
                 text: 'Sin dependencias',
                 class: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',

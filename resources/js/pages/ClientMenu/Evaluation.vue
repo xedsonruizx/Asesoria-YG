@@ -41,6 +41,10 @@ interface CategoryScore {
     score: number;
     maxScore: number;
     progress: number;
+    percentage?: number;
+    obtainedPoints?: number;
+    totalPossiblePoints?: number;
+    answeredQuestions?: number;
 }
 
 interface Evaluation {
@@ -69,12 +73,10 @@ const props = defineProps<Props>();
 const initializeAnswersWithDefaults = () => {
     const initialAnswers = { ...props.answers };
     
-    // Establecer valores por defecto para preguntas select (cadena vacía para mostrar placeholder)
     props.questions.forEach(question => {
         if (question.question_type === 'select' && question.is_active) {
-            // Solo establecer valor por defecto si no existe una respuesta válida
             if (initialAnswers[question.id] === undefined || initialAnswers[question.id] === null) {
-                initialAnswers[question.id] = ''; // Cadena vacía para mostrar "Seleccione una opción"
+                initialAnswers[question.id] = '';
             }
         }
     });
@@ -82,21 +84,24 @@ const initializeAnswersWithDefaults = () => {
     return initialAnswers;
 };
 
-// Estado reactivo
+// Estado reactivo - Priorizar datos del backend
 const evaluation = ref<Evaluation>(props.evaluation);
-const answers = ref<Record<number, any>>(initializeAnswersWithDefaults());
+const answers = ref<Record<number, any>>(props.answers || {});
 const showResults = ref<boolean>(props.showResults || props.evaluation?.is_completed || false);
 const isSubmitting = ref<boolean>(false);
 const notification = ref<{ type: string; message: string }>({ type: '', message: '' });
 
-// Clave para localStorage específica por evaluación y usuario
-const STORAGE_KEY = `evaluation_answers_${props.evaluation.id}_${props.evaluation.user_id}`;
+const STORAGE_KEY = `evaluation_${props.evaluation.id}_answers`;
 
 // Función para guardar respuestas en localStorage
 const saveAnswersToStorage = () => {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(answers.value));
-        console.log('Respuestas guardadas en localStorage');
+        const dataToSave = {
+            answers: answers.value,
+            showResults: showResults.value,
+            timestamp: Date.now()
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
     } catch (error) {
         console.error('Error al guardar respuestas:', error);
     }
@@ -104,22 +109,49 @@ const saveAnswersToStorage = () => {
 
 // Función para cargar respuestas desde localStorage
 const loadAnswersFromStorage = () => {
+    // PRIORIDAD 1: Si la evaluación está completada, SIEMPRE usar datos del backend
+    if (props.evaluation?.status === 'completed' || props.showResults) {
+        answers.value = props.answers || {};
+        showResults.value = true;
+        
+        // Limpiar localStorage si existe (ya no es necesario)
+        if (localStorage.getItem(STORAGE_KEY)) {
+            localStorage.removeItem(STORAGE_KEY);
+        }
+        
+        return;
+    }
+    
+    // PRIORIDAD 2: Solo usar localStorage para evaluaciones en progreso
     try {
-        const savedAnswers = localStorage.getItem(STORAGE_KEY);
-        if (savedAnswers) {
-            const parsedAnswers = JSON.parse(savedAnswers);
-            // Combinar respuestas guardadas con las inicializadas
-            const initializedAnswers = initializeAnswersWithDefaults();
-            answers.value = { ...initializedAnswers, ...parsedAnswers };
-            console.log('Respuestas cargadas desde localStorage');
-            // showNotification('info', 'Se han recuperado respuestas guardadas anteriormente.');
+        const savedData = localStorage.getItem(STORAGE_KEY);
+        
+        if (savedData) {
+            const parsedData = JSON.parse(savedData);
+            
+            // Verificar si los datos no son muy antiguos (24 horas)
+            const twentyFourHours = 24 * 60 * 60 * 1000;
+            if (parsedData.timestamp && Date.now() - parsedData.timestamp > twentyFourHours) {
+                localStorage.removeItem(STORAGE_KEY);
+                answers.value = initializeAnswersWithDefaults();
+                return;
+            }
+            
+            // Combinar respuestas guardadas con las del backend
+            if (parsedData.answers) {
+                const backendAnswers = props.answers || {};
+                const localStorageAnswers = parsedData.answers;
+                
+                // Backend tiene prioridad sobre localStorage
+                answers.value = { ...localStorageAnswers, ...backendAnswers };
+            } else {
+                answers.value = initializeAnswersWithDefaults();
+            }
         } else {
-            // Si no hay respuestas guardadas, usar las inicializadas
             answers.value = initializeAnswersWithDefaults();
         }
     } catch (error) {
-        console.error('Error al cargar respuestas:', error);
-        // En caso de error, usar las respuestas inicializadas
+        console.error('Error al cargar desde localStorage:', error);
         answers.value = initializeAnswersWithDefaults();
     }
 };
@@ -128,7 +160,6 @@ const loadAnswersFromStorage = () => {
 const clearStoredAnswers = () => {
     try {
         localStorage.removeItem(STORAGE_KEY);
-        console.log('Respuestas eliminadas del localStorage');
     } catch (error) {
         console.error('Error al limpiar localStorage:', error);
     }
@@ -145,9 +176,10 @@ const scheduleAutoSave = () => {
     }, 2000); // Guardar después de 2 segundos de inactividad
 };
 
-// Watcher para guardar automáticamente cuando cambien las respuestas
-watch(answers, () => {
-    if (!showResults.value) { // Solo guardar si no se han mostrado los resultados
+// Watcher para guardar automáticamente cuando cambien las respuestas o showResults
+watch([answers, showResults], () => {
+    // Solo guardar en localStorage si la evaluación NO está completada
+    if (!props.evaluation?.is_completed && !showResults.value && Object.keys(answers.value).length > 0) {
         scheduleAutoSave();
     }
 }, { deep: true });
@@ -178,7 +210,6 @@ const visibleQuestionsByCategory = computed(() => {
     return categoriesWithQuestions.filter(category => category.questions.length > 0);
 });
 
-// Computed para puntajes por categoría
 // Función para obtener los puntos de una respuesta
 const getAnswerPoints = (question: Question, answer: any): number => {
     if (!answer || answer === '') return 0;
@@ -231,11 +262,33 @@ const getAnswerPoints = (question: Question, answer: any): number => {
     return question.points;
 };
 
-// Actualizar el computed categoryScores
+// Computed para puntajes por categoría
 const categoryScores = computed(() => {
-    // Si tenemos categoryScores desde el backend (resultados completados), usarlos
+    // Si tenemos categoryScores desde el backend (resultados completados), convertirlos al formato esperado
     if (props.categoryScores && Object.keys(props.categoryScores).length > 0) {
-        return props.categoryScores;
+        const convertedScores: Record<string, CategoryScore> = {};
+        
+        // Crear mapeo dinámico desde las categorías de la base de datos
+        const categoryMap: Record<string, string> = {};
+        props.categories.forEach(category => {
+            categoryMap[category.slug] = category.name;
+        });
+        
+        Object.entries(props.categoryScores).forEach(([slug, data]) => {
+            const categoryName = categoryMap[slug] || slug;
+            convertedScores[categoryName] = {
+                category: categoryName,
+                score: data.score || 0,
+                maxScore: data.maxScore || data.max_score || 1,
+                progress: data.progress || 0,
+                percentage: data.percentage || 0,
+                obtainedPoints: data.obtainedPoints || 0,
+                totalPossiblePoints: data.totalPossiblePoints || 0,
+                answeredQuestions: data.answeredQuestions || 0
+            };
+        });
+        
+        return convertedScores;
     }
     
     // Si no, calcular basándose en las preguntas visibles (evaluación en progreso)
@@ -279,19 +332,37 @@ const categoryScores = computed(() => {
         }).length;
         
         const progress = categoryQuestions.length > 0 ? Math.round((answeredQuestions / categoryQuestions.length) * 100) : 0;
+        const percentage = maxScore > 0 ? Math.round((currentScore / maxScore) * 100) : 0;
         
         scores[category.name] = {
             category: category.name,
             score: currentScore,
             maxScore,
-            progress
+            progress,
+            percentage,
+            obtainedPoints: currentScore,
+            totalPossiblePoints: maxScore,
+            answeredQuestions
         };
     });
     
     return scores;
 });
+
 const totalScore = computed(() => {
     return Object.values(categoryScores.value).reduce((sum, cat) => sum + cat.score, 0);
+});
+
+const totalPossibleScore = computed(() => {
+    return Object.values(categoryScores.value).reduce((sum, cat) => sum + cat.maxScore, 0);
+});
+
+const totalAnsweredQuestions = computed(() => {
+    return Object.values(categoryScores.value).reduce((sum, cat) => sum + (cat.answeredQuestions || 0), 0);
+});
+
+const overallPercentage = computed(() => {
+    return totalPossibleScore.value > 0 ? Math.round((totalScore.value / totalPossibleScore.value) * 100) : 0;
 });
 
 const isValidForSubmission = computed(() => {
@@ -377,85 +448,120 @@ const handleBeforeUnload = () => {
 
 // Inicialización
 onMounted(() => {
-    // Cargar respuestas guardadas si existen
+    // Cargar respuestas (prioridad backend)
     loadAnswersFromStorage();
+    
+    // Logs iniciales al cargar la página
+    console.log('🔄 PÁGINA REFRESCADA - Datos iniciales:');
+    console.log('📊 Evaluación:', evaluation.value);
+    console.log('📝 Respuestas cargadas:', answers.value);
+    console.log('🎯 Puntajes por categoría:', categoryScores.value);
+    console.log('📈 Puntaje total:', totalScore.value, '/', totalPossibleScore.value);
+    console.log('📊 Porcentaje general:', overallPercentage.value + '%');
+    console.log('✅ Preguntas respondidas:', correctlyAnsweredQuestions.value);
+    console.log('🏁 Mostrar resultados:', showResults.value);
+    console.log('📋 Props recibidas:', {
+        evaluation: props.evaluation,
+        categoryScores: props.categoryScores,
+        showResults: props.showResults,
+        totalQuestions: props.questions.length
+    });
     
     // Agregar listener para guardar antes de cerrar la página
     window.addEventListener('beforeunload', handleBeforeUnload);
 });
 
-// Limpiar listeners al desmontar el componente
+// Limpiar listeners al desmontar
 onBeforeUnmount(() => {
-    window.removeEventListener('beforeunload', handleBeforeUnload);
     if (autoSaveTimeout) {
         clearTimeout(autoSaveTimeout);
     }
+    window.removeEventListener('beforeunload', handleBeforeUnload);
 });
 
-const getProgressColor = (progress: number) => {
+// Calcular preguntas respondidas correctamente
+const correctlyAnsweredQuestions = computed(() => {
+    const answeredCount = Object.entries(answers.value).filter(([questionId, answer]) => {
+        // Encontrar la pregunta
+        const question = visibleQuestionsByCategory.value
+            .flatMap(cat => cat.questions)
+            .find(q => q.id.toString() === questionId);
+        
+        if (!question || !answer || answer === '') return false;
+        
+        // Para preguntas con opciones, verificar si la respuesta es válida
+        if (['select', 'radio', 'checkbox'].includes(question.question_type)) {
+            if (question.question_type === 'checkbox') {
+                return Array.isArray(answer) && answer.length > 0;
+            }
+            return answer !== '';
+        }
+        
+        // Para otros tipos de preguntas
+        return answer !== undefined && answer !== null && answer !== '';
+    }).length;
+    
+    // Log de preguntas respondidas
+    console.log('📊 Preguntas respondidas:', answeredCount);
+    console.log('📝 Respuestas actuales:', answers.value);
+    
+    return answeredCount;
+});
+
+// Función para manejar solicitud de consultoría
+const handleRequestConsultation = () => {
+    // Redirigir a la página de contacto o abrir modal de consultoría
+    router.visit('/contact', {
+        data: {
+            service: 'consultation',
+            evaluation_completed: true
+        }
+    });
+};
+
+// Watcher para logs de puntajes y porcentajes
+watch([categoryScores, totalScore, overallPercentage], ([newCategoryScores, newTotalScore, newPercentage]) => {
+    console.log('🎯 Puntajes por categoría:', newCategoryScores);
+    console.log('📈 Puntaje total:', newTotalScore, '/', totalPossibleScore.value);
+    console.log('📊 Porcentaje general:', newPercentage + '%');
+    console.log('✅ Preguntas respondidas totales:', totalAnsweredQuestions.value);
+}, { deep: true });
+
+// Función para obtener el color del progreso
+const getProgressColor = (progress: number): string => {
     if (progress >= 80) return 'text-green-600';
-    if (progress >= 50) return 'text-yellow-600';
+    if (progress >= 60) return 'text-yellow-600';
+    if (progress >= 40) return 'text-orange-600';
     return 'text-red-600';
 };
 
-const getScoreMessage = (score: number, category: string) => {
-    const categoryData = categoryScores.value[category];
-    if (!categoryData) return '';
-    
-    const percentage = categoryData.progress;
-    
-    if (percentage >= 80) return `Excelente conocimiento en ${category}`;
-    if (percentage >= 60) return `Buen conocimiento en ${category}`;
-    if (percentage >= 40) return `Conocimiento regular en ${category}`;
-    return `Necesita mejorar en ${category}`;
+// Función para obtener el mensaje del puntaje
+const getScoreMessage = (score: number, categoryName: string): string => {
+    if (score >= 70) return `Excelente situación en ${categoryName}`;
+    if (score >= 50) return `Situación mejorable en ${categoryName}`;
+    return `Requiere atención en ${categoryName}`;
 };
 
-const getCircularProgress = (progress: number) => {
-    const circumference = 2 * Math.PI * 45;
-    const strokeDasharray = circumference;
-    const strokeDashoffset = circumference - (progress / 100) * circumference;
-    return { strokeDasharray, strokeDashoffset };
-};
-
-// Función para manejar la solicitud de consulta
-const handleRequestConsultation = () => {
-    // Aquí puedes agregar la lógica para redirigir a la página de contacto
-    // o abrir un modal de contacto
-    console.log('Solicitar consulta profesional');
-}
-
-
-
-// Función para evaluar si una pregunta debe mostrarse
+// Función para verificar si una pregunta debe mostrarse
 const shouldShowQuestion = (question: Question): boolean => {
     if (!question.show_condition) return true;
-    if (question.show_condition.parent_question_id === null) return true; // <-- Agregado
-
-    const { parent_question_id, operator, value } = question.show_condition;
-    const parentAnswer = answers.value[parent_question_id];
-
-    if (parentAnswer === undefined || parentAnswer === null) return false;
-
-    switch (operator) {
+    
+    const conditionAnswer = answers.value[question.show_condition.parent_question_id];
+    const expectedValue = question.show_condition.expected_value;
+    
+    switch (question.show_condition.operator) {
         case 'equals':
-            return parentAnswer === value;
+            return conditionAnswer === expectedValue;
         case 'not_equals':
-            return parentAnswer !== value;
+            return conditionAnswer !== expectedValue;
         case 'contains':
-            return Array.isArray(parentAnswer) && parentAnswer.includes(value);
+            return Array.isArray(conditionAnswer) && conditionAnswer.includes(expectedValue);
         case 'not_contains':
-            return Array.isArray(parentAnswer) && !parentAnswer.includes(value);
+            return !Array.isArray(conditionAnswer) || !conditionAnswer.includes(expectedValue);
         default:
-            return false;
+            return true;
     }
 };
-
-
-
-
-
-
-
 </script>
 
 <template>
@@ -478,9 +584,9 @@ const shouldShowQuestion = (question: Question): boolean => {
     <!-- Mostrar resultados si la evaluación está completada -->
     <EvaluationResults
         v-if="showResults"
-        :rh-score="Math.round((categoryScores['Recursos Humanos']?.progress || 0))"
-        :legal-score="Math.round((categoryScores['Legal']?.progress || 0))"
-        :total-questions="Object.values(answers).length"
+        :categories="props.categories"
+        :category-scores="categoryScores"
+        :total-questions="correctlyAnsweredQuestions"
         @restart="handleRestart"
         @request-consultation="handleRequestConsultation"
     />

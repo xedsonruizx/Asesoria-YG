@@ -49,14 +49,12 @@
       :error="errors?.options"
     />
     
-    <YesNoInput
-      v-else-if="questionType === 'yes_no'"
-    />
+    <!-- <YesNoInput v-else-if="questionType === 'yes_no'"/> -->
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import TextInput from './TextInput.vue';
 import TextareaInput from './TextareaInput.vue';
 import SelectInput from './SelectInput.vue';
@@ -76,7 +74,7 @@ interface QuestionOption {
 interface Props {
   questionType: QuestionType;
   placeholder?: string;
-  options?: QuestionOption[]; // Cambiar de string[] a QuestionOption[]
+  options?: QuestionOption[];
   minValue?: number | null;
   maxValue?: number | null;
   errors?: Record<string, string>;
@@ -84,14 +82,15 @@ interface Props {
 
 interface Emits {
   (e: 'update:placeholder', value: string): void;
-  (e: 'update:options', value: string[]): void;
+  (e: 'update:options', value: QuestionOption[]): void;
   (e: 'update:minValue', value: number | null): void;
   (e: 'update:maxValue', value: number | null): void;
+  (e: 'update:totalPoints', value: number): void; // Nuevo emit para los puntos totales
 }
 
 const props = withDefaults(defineProps<Props>(), {
   placeholder: '',
-  options: () => [], // Esto ya está correcto
+  options: () => [],
   minValue: null,
   maxValue: null,
   errors: () => ({})
@@ -99,11 +98,34 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<Emits>();
 
+// Computed para calcular el total de puntos de las opciones
+const totalPoints = computed(() => {
+  if (!props.options || props.options.length === 0) return 0;
+  
+  // Para tipos que tienen puntos individuales por opción
+  if (['select', 'radio', 'checkbox'].includes(props.questionType)) {
+    if (props.questionType === 'checkbox') {
+      // Para checkboxes, sumar todos los puntos (máximo posible)
+      return props.options.reduce((sum, option) => sum + (option.points || 0), 0);
+    } else {
+      // Para select y radio, tomar el máximo puntaje disponible
+      return Math.max(...props.options.map(option => option.points || 0));
+    }
+  }
+  
+  return 0;
+});
+
+// Watcher para emitir cambios en el total de puntos
+watch(totalPoints, (newTotal) => {
+  emit('update:totalPoints', newTotal);
+}, { immediate: true });
+
 const updatePlaceholder = (value: string) => {
   emit('update:placeholder', value);
 };
 
-const updateOptions = (value: string[]) => {
+const updateOptions = (value: QuestionOption[]) => {
   emit('update:options', value);
 };
 

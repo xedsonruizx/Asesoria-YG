@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\User;
 use Spatie\Permission\Models\Role;
+use App\Models\EvaluationAnswer;
+use App\Models\EvaluationQuestion;
 
 class UserController extends Controller
 {
@@ -14,7 +16,36 @@ class UserController extends Controller
      */
     public function index()
     {
-        $users = User::with('roles')->latest()->paginate(10);
+        $users = User::with(['roles', 'evaluations' => function($query) {
+            $query->where('status', 'completed');
+        }])->latest()->paginate(10);
+
+        // Calcular puntos para cada usuario
+        $users->getCollection()->transform(function ($user) {
+            // Obtener todas las respuestas de evaluaciones completadas del usuario
+            $totalPoints = EvaluationAnswer::whereHas('evaluation', function($query) use ($user) {
+                $query->where('user_id', $user->id)
+                      ->where('status', 'completed');
+            })
+            ->whereHas('question', function($query) {
+                // Solo contar preguntas que tienen más de 1 punto
+                // Esto incluye tanto preguntas con puntos base > 1 como preguntas con opciones que tienen > 1 punto
+                $query->where(function($q) {
+                    $q->where('points', '>', 1)
+                      ->orWhere(function($subQ) {
+                          // Para preguntas con opciones que tienen puntos individuales
+                          $subQ->whereIn('question_type', ['select', 'radio', 'checkbox'])
+                               ->whereRaw('JSON_EXTRACT(options, "$[*].points") IS NOT NULL')
+                               ->whereRaw('JSON_EXTRACT(options, "$[*].points") REGEXP "[2-9]|[1-9][0-9]+"');
+                      });
+                });
+            })
+            ->where('points_earned', '>', 1) // Solo contar respuestas que efectivamente obtuvieron más de 1 punto
+            ->sum('points_earned');
+
+            $user->total_evaluation_points = $totalPoints;
+            return $user;
+        });
 
         return Inertia::render('administration/Users/Index', [
             'users' => $users
