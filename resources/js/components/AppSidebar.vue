@@ -6,9 +6,11 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, Sid
 import { dashboard, login } from '@/routes';
 import posts from '@/routes/posts';
 import users from '@/routes/users';
+import questions from '@/routes/questions';
+
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, FileText, UsersRound, ClipboardList } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, FileText, UsersRound, ClipboardList, HelpCircle } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
 const mainNavItems: NavItem[] = [
@@ -31,6 +33,11 @@ const mainNavItems: NavItem[] = [
         title: 'Evaluaciones',
         href: '/evaluations',
         icon: ClipboardList,
+    },
+    {
+        title: 'Preguntas',
+        href: '/admin/questions',
+        icon: HelpCircle,
     },
         {
         title: 'membresias',

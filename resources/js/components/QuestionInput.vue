@@ -4,8 +4,8 @@ import { computed } from 'vue';
 interface Question {
     id: number;
     question_text: string;
-    question_type: 'text' | 'textarea' | 'select' | 'number' | 'checkbox' | 'yes_no';
-    options?: string[];
+    question_type: 'text' | 'textarea' | 'select' | 'number' | 'checkbox' | 'radio';
+    options?: string[] | Array<{text: string, points: number}>;
     placeholder?: string;
     min_value?: number;
     max_value?: number;
@@ -33,14 +33,70 @@ const value = computed({
     set: (newValue) => emit('update:modelValue', newValue)
 });
 
+// Función para obtener las opciones en formato uniforme
+const getOptionsArray = computed(() => {
+    if (!props.question.options) return [];
+    
+    let options = props.question.options;
+    
+    // Si las opciones vienen como string JSON, parsearlas
+    if (typeof options === 'string') {
+        try {
+            options = JSON.parse(options);
+        } catch (e) {
+            console.error('Error parsing options JSON:', e, 'Original options:', props.question.options);
+            // Si falla el parsing, intentar como array de strings separadas por coma
+            if (typeof props.question.options === 'string') {
+                const stringOptions = props.question.options.split(',').map(opt => opt.trim());
+                return stringOptions.map(option => ({
+                    text: option,
+                    points: 0
+                }));
+            }
+            return [];
+        }
+    }
+    
+    // Si es el nuevo formato con objetos {text, points}
+    if (Array.isArray(options) && 
+        options.length > 0 && 
+        typeof options[0] === 'object' && 
+        'text' in options[0]) {
+        const result = options as Array<{text: string, points: number}>;
+        console.log('Parsed options for question', props.question.id, ':', result);
+        return result;
+    }
+    
+    // Si es el formato antiguo (array de strings)
+    if (Array.isArray(options)) {
+        const result = options.map(option => ({
+            text: typeof option === 'string' ? option : String(option),
+            points: 0
+        }));
+        console.log('Converted string options for question', props.question.id, ':', result);
+        return result;
+    }
+    
+    return [];
+});
+
+// Función para obtener el texto de una opción
+const getOptionText = (option: any): string => {
+    return typeof option === 'object' ? option.text : String(option);
+};
+
+// Función para obtener el valor de una opción (usar un ID único)
+const getOptionValue = (option: any): string => {
+    if (typeof option === 'object') {
+        // Usar el texto como valor para mantener consistencia
+        return option.text;
+    }
+    return String(option);
+};
+
 // Computed para determinar si el campo está vacío
 const isFieldEmpty = computed(() => {
     const currentValue = value.value;
-    
-    // Para preguntas yes_no, considerar vacío solo si es undefined o null
-    if (props.question.question_type === 'yes_no') {
-        return currentValue === undefined || currentValue === null;
-    }
     
     // Para checkboxes, considerar vacío si no es array o está vacío
     if (props.question.question_type === 'checkbox') {
@@ -106,11 +162,14 @@ const handleCheckboxChange = (option: string, checked: boolean) => {
             >
                 <option value="" disabled>Seleccione una opción</option>
                 <option 
-                    v-for="option in question.options" 
-                    :key="option" 
-                    :value="option"
+                    v-for="option in getOptionsArray" 
+                    :key="getOptionValue(option)" 
+                    :value="getOptionValue(option)"
                 >
-                    {{ option }}
+                    {{ getOptionText(option) }}
+                    <span v-if="option.points !== undefined" class="text-xs text-gray-500">
+                        ({{ option.points }} puntos)
+                    </span>
                 </option>
             </select>
             <!-- Flecha personalizada -->
@@ -119,6 +178,29 @@ const handleCheckboxChange = (option: string, checked: boolean) => {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
             </div>
+        </div>
+
+        <!-- Radio buttons -->
+        <div v-else-if="question.question_type === 'radio'" class="space-y-2">
+            <label 
+                v-for="option in getOptionsArray" 
+                :key="getOptionValue(option)" 
+                class="flex items-center cursor-pointer"
+            >
+                <input
+                    type="radio"
+                    :name="`question_${question.id}`"
+                    :value="getOptionValue(option)"
+                    v-model="value"
+                    class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:outline-none dark:bg-gray-700 dark:border-gray-600"
+                />
+                <span class="ml-2 text-sm text-gray-700 dark:text-white">
+                    {{ getOptionText(option) }}
+                    <span v-if="option.points !== undefined" class="text-xs text-gray-500 ml-1">
+                        ({{ option.points }} puntos)
+                    </span>
+                </span>
+            </label>
         </div>
 
         <!-- Campo numérico -->
@@ -132,45 +214,26 @@ const handleCheckboxChange = (option: string, checked: boolean) => {
             class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         />
 
-        <!-- Radio buttons para yes_no -->
-        <div v-else-if="question.question_type === 'yes_no'" class="flex space-x-6">
-            <label class="flex items-center cursor-pointer">
-                <input
-                    type="radio"
-                    :name="`question_${question.id}`"
-                    :value="true"
-                    v-model="value"
-                    class="appearance-none w-4 h-4 border-2 border-gray-300 rounded-full checked:bg-blue-500 checked:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 relative"
-                />
-                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-white">Sí</span>
-            </label>
-            <label class="flex items-center cursor-pointer">
-                <input
-                    type="radio"
-                    :name="`question_${question.id}`"
-                    :value="false"
-                    v-model="value"
-                    class="appearance-none w-4 h-4 border-2 border-gray-300 rounded-full checked:bg-blue-500 checked:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 relative"
-                />
-                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-white">No</span>
-            </label>
-        </div>
-
         <!-- Checkboxes múltiples -->
         <div v-else-if="question.question_type === 'checkbox'" class="space-y-2">
             <label 
-                v-for="option in question.options" 
-                :key="option" 
+                v-for="option in getOptionsArray" 
+                :key="getOptionValue(option)" 
                 class="flex items-center cursor-pointer"
             >
                 <input
                     type="checkbox"
-                    :value="option"
-                    :checked="Array.isArray(value) && value.includes(option)"
-                    @change="handleCheckboxChange(option, ($event.target as HTMLInputElement).checked)"
-                    class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                    :value="getOptionValue(option)"
+                    :checked="Array.isArray(value) && value.includes(getOptionValue(option))"
+                    @change="handleCheckboxChange(getOptionValue(option), ($event.target as HTMLInputElement).checked)"
+                    class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:outline-none dark:bg-gray-700 dark:border-gray-600"
                 />
-                <span class="ml-2 text-sm text-gray-700 dark:text-white">{{ option }}</span>
+                <span class="ml-2 text-sm text-gray-700 dark:text-white">
+                    {{ getOptionText(option) }}
+                    <span v-if="option.points !== undefined" class="text-xs text-gray-500 ml-1">
+                        ({{ option.points }} puntos)
+                    </span>
+                </span>
             </label>
         </div>
 

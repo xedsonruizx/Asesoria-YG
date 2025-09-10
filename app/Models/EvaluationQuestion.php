@@ -35,6 +35,18 @@ class EvaluationQuestion extends Model
         'is_active' => 'boolean',
     ];
 
+    /**
+     * Accessor para asegurar que options siempre sea un array
+     */
+    public function getOptionsAttribute($value)
+    {
+        if (is_string($value)) {
+            return json_decode($value, true) ?: [];
+        }
+        
+        return is_array($value) ? $value : [];
+    }
+
     public function category(): BelongsTo
     {
         return $this->belongsTo(EvaluationCategory::class, 'category_id');

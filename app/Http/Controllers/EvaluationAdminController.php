@@ -186,35 +186,45 @@ class EvaluationAdminController extends Controller
     {
         $evaluation = Evaluation::with(['user', 'answers.question.category'])
             ->findOrFail($id);
-
+    
         if ($evaluation->status !== 'completed') {
             return redirect()->back()->with('error', 'Solo se pueden generar PDFs de evaluaciones completadas.');
         }
-
+    
         $report = $evaluation->generateReport();
         $companyName = config('app.company_name', 'Asesorías YG');
         
-        // Agrupar preguntas y respuestas por categoría
+        // Agrupar preguntas y respuestas por categoría con puntos obtenidos
         $questionsByCategory = [];
         foreach ($evaluation->answers as $answer) {
             $categoryName = $answer->question->category->name;
             if (!isset($questionsByCategory[$categoryName])) {
                 $questionsByCategory[$categoryName] = [];
             }
+            
+            // Formatear la respuesta según el tipo
+            $formattedAnswer = $answer->answer_value;
+            if (is_array($formattedAnswer)) {
+                $formattedAnswer = implode(', ', $formattedAnswer);
+            } elseif (is_bool($formattedAnswer)) {
+                $formattedAnswer = $formattedAnswer ? 'Sí' : 'No';
+            }
+            
             $questionsByCategory[$categoryName][] = [
                 'question' => $answer->question->question_text,
-                'answer' => $answer->answer_value,
-                'points' => $answer->points
+                'answer' => $formattedAnswer,
+                'points' => $answer->points_earned ?? 0,
+                'question_type' => $answer->question->question_type
             ];
         }
-
+    
         $pdf = Pdf::loadView('pdf.evaluation-report', [
             'evaluation' => $evaluation,
             'report' => $report,
             'companyName' => $companyName,
             'questionsByCategory' => $questionsByCategory
         ]);
-
+    
         $fileName = 'Evaluacion_previa_' . str_replace(' ', '_', $evaluation->user->name) . '.pdf';
         
         return $pdf->download($fileName);

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue';
 import { Head } from '@inertiajs/vue3';
 import Button from '@/components/ui/button/Button.vue';
 import Card from '@/components/ui/card/Card.vue';
@@ -13,15 +13,16 @@ interface Question {
     id: number;
     question_text: string;
     category_id: number;
-    question_type: 'text' | 'textarea' | 'select' | 'number' | 'checkbox' | 'yes_no';
-    options?: string[];
+    question_type: 'text' | 'textarea' | 'select' | 'number' | 'checkbox' | 'radio';
+    options?: string | string[] | Array<{text: string, points: number}>;
     placeholder?: string;
     min_value?: number;
     max_value?: number;
     points: number;
     show_condition?: {
-        questionId: number;
-        answer: any;
+        parent_question_id: number;
+        operator: 'equals' | 'not_equals' | 'contains' | 'not_contains';
+        expected_value: any;
     };
     order: number;
     is_active: boolean;
@@ -64,12 +65,92 @@ interface Props {
 
 const props = defineProps<Props>();
 
+// Función para inicializar respuestas con valores por defecto
+const initializeAnswersWithDefaults = () => {
+    const initialAnswers = { ...props.answers };
+    
+    // Establecer valores por defecto para preguntas select (cadena vacía para mostrar placeholder)
+    props.questions.forEach(question => {
+        if (question.question_type === 'select' && question.is_active) {
+            // Solo establecer valor por defecto si no existe una respuesta válida
+            if (initialAnswers[question.id] === undefined || initialAnswers[question.id] === null) {
+                initialAnswers[question.id] = ''; // Cadena vacía para mostrar "Seleccione una opción"
+            }
+        }
+    });
+    
+    return initialAnswers;
+};
+
 // Estado reactivo
 const evaluation = ref<Evaluation>(props.evaluation);
-const answers = ref<Record<number, any>>(props.answers || {});
+const answers = ref<Record<number, any>>(initializeAnswersWithDefaults());
 const showResults = ref<boolean>(props.showResults || props.evaluation?.is_completed || false);
 const isSubmitting = ref<boolean>(false);
 const notification = ref<{ type: string; message: string }>({ type: '', message: '' });
+
+// Clave para localStorage específica por evaluación y usuario
+const STORAGE_KEY = `evaluation_answers_${props.evaluation.id}_${props.evaluation.user_id}`;
+
+// Función para guardar respuestas en localStorage
+const saveAnswersToStorage = () => {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(answers.value));
+        console.log('Respuestas guardadas en localStorage');
+    } catch (error) {
+        console.error('Error al guardar respuestas:', error);
+    }
+};
+
+// Función para cargar respuestas desde localStorage
+const loadAnswersFromStorage = () => {
+    try {
+        const savedAnswers = localStorage.getItem(STORAGE_KEY);
+        if (savedAnswers) {
+            const parsedAnswers = JSON.parse(savedAnswers);
+            // Combinar respuestas guardadas con las inicializadas
+            const initializedAnswers = initializeAnswersWithDefaults();
+            answers.value = { ...initializedAnswers, ...parsedAnswers };
+            console.log('Respuestas cargadas desde localStorage');
+            // showNotification('info', 'Se han recuperado respuestas guardadas anteriormente.');
+        } else {
+            // Si no hay respuestas guardadas, usar las inicializadas
+            answers.value = initializeAnswersWithDefaults();
+        }
+    } catch (error) {
+        console.error('Error al cargar respuestas:', error);
+        // En caso de error, usar las respuestas inicializadas
+        answers.value = initializeAnswersWithDefaults();
+    }
+};
+
+// Función para limpiar localStorage cuando se completa la evaluación
+const clearStoredAnswers = () => {
+    try {
+        localStorage.removeItem(STORAGE_KEY);
+        console.log('Respuestas eliminadas del localStorage');
+    } catch (error) {
+        console.error('Error al limpiar localStorage:', error);
+    }
+};
+
+// Función para guardar automáticamente cada cierto tiempo
+let autoSaveTimeout: NodeJS.Timeout | null = null;
+const scheduleAutoSave = () => {
+    if (autoSaveTimeout) {
+        clearTimeout(autoSaveTimeout);
+    }
+    autoSaveTimeout = setTimeout(() => {
+        saveAnswersToStorage();
+    }, 2000); // Guardar después de 2 segundos de inactividad
+};
+
+// Watcher para guardar automáticamente cuando cambien las respuestas
+watch(answers, () => {
+    if (!showResults.value) { // Solo guardar si no se han mostrado los resultados
+        scheduleAutoSave();
+    }
+}, { deep: true });
 
 // Agregar la computed property faltante para agrupar preguntas por categoría
 const visibleQuestionsByCategory = computed(() => {
@@ -98,6 +179,59 @@ const visibleQuestionsByCategory = computed(() => {
 });
 
 // Computed para puntajes por categoría
+// Función para obtener los puntos de una respuesta
+const getAnswerPoints = (question: Question, answer: any): number => {
+    if (!answer || answer === '') return 0;
+    
+    // Para tipos con puntos individuales por opción
+    if (['select', 'radio', 'checkbox'].includes(question.question_type)) {
+        if (!question.options) return 0;
+        
+        let options = question.options;
+        
+        // Si las opciones vienen como string JSON, parsearlas
+        if (typeof options === 'string') {
+            try {
+                options = JSON.parse(options);
+            } catch (e) {
+                console.error('Error parsing options JSON in getAnswerPoints:', e);
+                // Si falla el parsing, usar puntos base de la pregunta
+                return question.points;
+            }
+        }
+        
+        // Si las opciones tienen el nuevo formato con puntos
+        if (Array.isArray(options) && 
+            options.length > 0 && 
+            typeof options[0] === 'object' && 
+            'points' in options[0]) {
+            
+            const optionsWithPoints = options as Array<{text: string, points: number}>;
+            
+            if (question.question_type === 'checkbox' && Array.isArray(answer)) {
+                // Para checkboxes, sumar puntos de todas las opciones seleccionadas
+                return answer.reduce((sum, selectedOption) => {
+                    const option = optionsWithPoints.find(opt => opt.text === selectedOption);
+                    return sum + (option?.points || 0);
+                }, 0);
+            } else {
+                // Para select y radio, obtener puntos de la opción seleccionada
+                const option = optionsWithPoints.find(opt => opt.text === answer);
+                return option?.points || 0;
+            }
+        }
+        
+        // Si es formato antiguo (array de strings), usar puntos base
+        if (Array.isArray(options)) {
+            return question.points;
+        }
+    }
+    
+    // Para otros tipos o formato antiguo, usar los puntos base de la pregunta
+    return question.points;
+};
+
+// Actualizar el computed categoryScores
 const categoryScores = computed(() => {
     // Si tenemos categoryScores desde el backend (resultados completados), usarlos
     if (props.categoryScores && Object.keys(props.categoryScores).length > 0) {
@@ -109,19 +243,34 @@ const categoryScores = computed(() => {
     
     visibleQuestionsByCategory.value.forEach(category => {
         const categoryQuestions = category.questions;
-        const maxScore = categoryQuestions.reduce((sum, q) => sum + q.points, 0);
-        const currentScore = categoryQuestions.reduce((sum, q) => {
-            const answer = answers.value[q.id];
-            if (answer !== undefined && answer !== '' && answer !== null) {
-                if (q.question_type === 'yes_no') {
-                    return sum + (answer === true ? q.points : 0);
-                } else if (q.question_type === 'checkbox' && Array.isArray(answer)) {
-                    return sum + (answer.length > 0 ? q.points : 0);
-                } else {
-                    return sum + q.points;
+        
+        // Calcular puntaje máximo considerando el nuevo formato
+        const maxScore = categoryQuestions.reduce((sum, q) => {
+            if (['select', 'radio', 'checkbox'].includes(q.question_type) && q.options) {
+                // Si tiene opciones con puntos individuales
+                if (Array.isArray(q.options) && 
+                    q.options.length > 0 && 
+                    typeof q.options[0] === 'object' && 
+                    'points' in q.options[0]) {
+                    
+                    const optionsWithPoints = q.options as Array<{text: string, points: number}>;
+                    
+                    if (q.question_type === 'checkbox') {
+                        // Para checkboxes, el máximo es la suma de todos los puntos
+                        return sum + optionsWithPoints.reduce((optSum, opt) => optSum + opt.points, 0);
+                    } else {
+                        // Para select y radio, el máximo es el mayor puntaje disponible
+                        return sum + Math.max(...optionsWithPoints.map(opt => opt.points));
+                    }
                 }
             }
-            return sum;
+            return sum + q.points;
+        }, 0);
+        
+        // Calcular puntaje actual
+        const currentScore = categoryQuestions.reduce((sum, q) => {
+            const answer = answers.value[q.id];
+            return sum + getAnswerPoints(q, answer);
         }, 0);
         
         const answeredQuestions = categoryQuestions.filter(q => {
@@ -157,7 +306,7 @@ const showNotification = (type: string, message: string) => {
     }, 3000);
 };
 
-// Modificar la función submitEvaluation para no redirigir
+// Modificar la función submitEvaluation
 const submitEvaluation = async () => {
     if (!isValidForSubmission.value) {
         showNotification('error', 'Debe completar al menos el 80% de cada sección para enviar la evaluación.');
@@ -176,24 +325,30 @@ const submitEvaluation = async () => {
             // Actualizar el estado local con los datos del servidor
             evaluation.value = response.data.evaluation;
             
+            // Limpiar localStorage al completar exitosamente
+            clearStoredAnswers();
+            
             // Mostrar resultados
             showResults.value = true;
             showNotification('success', '¡Evaluación completada exitosamente!');
         }
     } catch (error) {
         console.error('Error al enviar evaluación:', error);
-        showNotification('error', 'Error al enviar la evaluación. Inténtelo nuevamente.');
+        showNotification('error', 'Error al enviar la evaluación. Las respuestas se han guardado automáticamente.');
     } finally {
         isSubmitting.value = false;
     }
 };
 
-// Función para manejar el reinicio de la evaluación
+// Modificar la función handleRestart
 const handleRestart = async () => {
     try {
         await axios.post('/evaluation/restart', {
             evaluation_id: evaluation.value.id
         });
+        
+        // Limpiar localStorage al reiniciar
+        clearStoredAnswers();
         
         // Resetear estado local
         answers.value = {};
@@ -212,6 +367,30 @@ const handleRestart = async () => {
         showNotification('error', 'Error al reiniciar la evaluación.');
     }
 };
+
+// Función para manejar el evento beforeunload (cuando el usuario cierra la página)
+const handleBeforeUnload = () => {
+    if (!showResults.value && Object.keys(answers.value).length > 0) {
+        saveAnswersToStorage();
+    }
+};
+
+// Inicialización
+onMounted(() => {
+    // Cargar respuestas guardadas si existen
+    loadAnswersFromStorage();
+    
+    // Agregar listener para guardar antes de cerrar la página
+    window.addEventListener('beforeunload', handleBeforeUnload);
+});
+
+// Limpiar listeners al desmontar el componente
+onBeforeUnmount(() => {
+    window.removeEventListener('beforeunload', handleBeforeUnload);
+    if (autoSaveTimeout) {
+        clearTimeout(autoSaveTimeout);
+    }
+});
 
 const getProgressColor = (progress: number) => {
     if (progress >= 80) return 'text-green-600';
@@ -244,6 +423,36 @@ const handleRequestConsultation = () => {
     // o abrir un modal de contacto
     console.log('Solicitar consulta profesional');
 }
+
+
+
+// Función para evaluar si una pregunta debe mostrarse
+const shouldShowQuestion = (question: Question): boolean => {
+    if (!question.show_condition) return true;
+    if (question.show_condition.parent_question_id === null) return true; // <-- Agregado
+
+    const { parent_question_id, operator, value } = question.show_condition;
+    const parentAnswer = answers.value[parent_question_id];
+
+    if (parentAnswer === undefined || parentAnswer === null) return false;
+
+    switch (operator) {
+        case 'equals':
+            return parentAnswer === value;
+        case 'not_equals':
+            return parentAnswer !== value;
+        case 'contains':
+            return Array.isArray(parentAnswer) && parentAnswer.includes(value);
+        case 'not_contains':
+            return Array.isArray(parentAnswer) && !parentAnswer.includes(value);
+        default:
+            return false;
+    }
+};
+
+
+
+
 
 
 
@@ -323,7 +532,7 @@ const handleRequestConsultation = () => {
 
                     <div class="space-y-6">
                         <QuestionInput
-                            v-for="question in category.questions" 
+                            v-for="question in category.questions.filter(q => shouldShowQuestion(q))" 
                             :key="question.id"
                             :question="question"
                             v-model="answers[question.id]"

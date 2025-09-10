@@ -62,7 +62,13 @@ class EvaluationController extends Controller
         $questions = EvaluationQuestion::active()->ordered()->get()->map(function ($question) {
             // Asegurar que las opciones sean un array
             if ($question->options && is_string($question->options)) {
-                $question->options = json_decode($question->options, true);
+                $decodedOptions = json_decode($question->options, true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $question->options = $decodedOptions;
+                } else {
+                    // Si falla el JSON decode, mantener como string para manejo en frontend
+                    error_log("Failed to decode options for question {$question->id}: " . json_last_error_msg());
+                }
             }
             // Asegurar que show_condition sea un array
             if ($question->show_condition && is_string($question->show_condition)) {
@@ -124,12 +130,28 @@ class EvaluationController extends Controller
             abort(403);
         }
     
+        // Obtener la pregunta para validar el tipo de respuesta
+        $question = EvaluationQuestion::findOrFail($request->question_id);
+        
+        // Procesar la respuesta según el tipo de pregunta
+        $answerValue = $request->answer_value;
+        
+        // Para preguntas de checkbox, asegurar que sea un array
+        if ($question->question_type === 'checkbox' && !is_array($answerValue)) {
+            $answerValue = [$answerValue];
+        }
+        
+        // Para preguntas yes_no, convertir a boolean
+        if ($question->question_type === 'yes_no') {
+            $answerValue = filter_var($answerValue, FILTER_VALIDATE_BOOLEAN);
+        }
+    
         $answer = EvaluationAnswer::updateOrCreate(
             [
                 'evaluation_id' => $request->evaluation_id,
                 'question_id' => $request->question_id,
             ],
-            ['answer_value' => $request->answer_value]
+            ['answer_value' => $answerValue]
         );
     
         // Calcular puntos y actualizar scores usando el método correcto
@@ -139,6 +161,7 @@ class EvaluationController extends Controller
         return response()->json([
             'success' => true,
             'evaluation' => $evaluation->fresh(),
+            'points_earned' => $answer->points_earned,
         ]);
     }
 

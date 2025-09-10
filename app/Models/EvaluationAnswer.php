@@ -37,12 +37,53 @@ class EvaluationAnswer extends Model
         $answer = $this->answer_value;
         $points = 0;
 
-        if ($question->type === 'yes_no') {
-            $points = $answer === true ? $question->points : 0;
-        } elseif ($question->type === 'checkbox') {
-            $points = is_array($answer) && count($answer) > 0 ? $question->points : 0;
-        } elseif (!empty($answer)) {
-            $points = $question->points;
+        // Manejar diferentes tipos de preguntas
+        switch ($question->question_type) {
+            case 'yes_no':
+                $points = $answer === true ? $question->points : 0;
+                break;
+                
+            case 'select':
+            case 'radio':
+                if (!empty($answer) && is_array($question->options)) {
+                    // Buscar la opción seleccionada y obtener sus puntos
+                    foreach ($question->options as $option) {
+                        if (is_array($option) && isset($option['text']) && $option['text'] === $answer) {
+                            $points = $option['points'] ?? 0;
+                            break;
+                        } elseif (is_string($option) && $option === $answer) {
+                            // Compatibilidad con formato anterior
+                            $points = $question->points;
+                            break;
+                        }
+                    }
+                }
+                break;
+                
+            case 'checkbox':
+                if (is_array($answer) && is_array($question->options)) {
+                    // Sumar puntos de todas las opciones seleccionadas
+                    foreach ($answer as $selectedOption) {
+                        foreach ($question->options as $option) {
+                            if (is_array($option) && isset($option['text']) && $option['text'] === $selectedOption) {
+                                $points += $option['points'] ?? 0;
+                                break;
+                            } elseif (is_string($option) && $option === $selectedOption) {
+                                // Compatibilidad con formato anterior
+                                $points += $question->points;
+                                break;
+                            }
+                        }
+                    }
+                }
+                break;
+                
+            case 'text':
+            case 'textarea':
+            case 'number':
+                // Para preguntas de texto/número, asignar puntos si hay respuesta
+                $points = !empty($answer) ? $question->points : 0;
+                break;
         }
 
         $this->update(['points_earned' => $points]);

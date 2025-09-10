@@ -546,11 +546,23 @@
                     <div class="question-text">{{ $item['question'] }}</div>
                     <div class="answer-box">
                         @if(is_array($item['answer']))
-                            {{ implode(', ', $item['answer']) }}
+                            @if(count($item['answer']) > 0)
+                                {{ implode(', ', $item['answer']) }}
+                            @else
+                                Sin respuesta
+                            @endif
                         @elseif(is_bool($item['answer']))
                             {{ $item['answer'] ? 'Sí' : 'No' }}
+                        @elseif(is_null($item['answer']) || $item['answer'] === '')
+                            Sin respuesta
                         @else
                             {{ $item['answer'] }}
+                        @endif
+                        
+                        @if(isset($item['points']) && $item['points'] > 0)
+                            <div style="margin-top: 8px; font-size: 12px; color: #059669; font-weight: 500;">
+                                Puntos obtenidos: {{ $item['points'] }}
+                            </div>
                         @endif
                     </div>
                 </div>

@@ -8,6 +8,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\EvaluationController;
 use App\Http\Controllers\EvaluationAdminController;
+use App\Http\Controllers\EvaluationQuestionController;
 
 // ============================================
 // RUTAS PÚBLICAS (SIN AUTENTICACIÓN)
@@ -61,6 +62,25 @@ Route::middleware(['auth'])->group(function () {
         ]);
         Route::post('evaluations/{evaluation}/reset', [EvaluationAdminController::class, 'reset'])->name('admin.evaluations.reset');
         Route::get('/evaluations/{id}/pdf', [EvaluationAdminController::class, 'generatePdf'])->name('admin.evaluations.pdf');
+    
+        // Rutas específicas ANTES del resource route
+        Route::get('admin/questions/next-order', [EvaluationQuestionController::class, 'getNextOrder'])
+            ->name('admin.questions.next-order');
+        Route::get('admin/questions/by-category', [EvaluationQuestionController::class, 'getQuestionsByCategory'])
+            ->name('admin.questions.by-category');
+        Route::patch('admin/questions/{question}/toggle-status', [EvaluationQuestionController::class, 'toggleStatus'])
+            ->name('admin.questions.toggle-status');
+        
+        // Resource route DESPUÉS de las rutas específicas
+        Route::resource('admin/questions', EvaluationQuestionController::class)->names([
+            'index' => 'admin.questions.index',
+            'create' => 'admin.questions.create',
+            'store' => 'admin.questions.store',
+            'show' => 'admin.questions.show',
+            'edit' => 'admin.questions.edit',
+            'update' => 'admin.questions.update',
+            'destroy' => 'admin.questions.destroy',
+        ]);
     });
     
     // Rutas que requieren permiso 'guest' (solo ver)
