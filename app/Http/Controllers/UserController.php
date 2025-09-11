@@ -173,24 +173,15 @@ class UserController extends Controller
             ->with('success', 'Usuario actualizado exitosamente.');
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
-    {
-        $user = User::findOrFail($id);
-        $user->delete();
 
-        return redirect()->route('users.index')
-            ->with('success', 'Usuario eliminado exitosamente.');
-    }
-
-    /**
-     * Remove the specified resource from storage (soft delete).
-     */
-    public function destroy(User $user)
+    public function destroy($user)
     {
         try {
+            // Si recibimos un ID, buscar el usuario
+            if (is_string($user) || is_numeric($user)) {
+                $user = User::findOrFail($user);
+            }
+            
             $user->delete(); // Soft delete
 
             return redirect()->route('users.index')

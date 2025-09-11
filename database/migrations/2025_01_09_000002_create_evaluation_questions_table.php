@@ -23,6 +23,7 @@ return new class extends Migration
             $table->json('validation_rules')->nullable(); // Reglas de validación
             $table->boolean('is_required')->default(true);
             $table->boolean('is_active')->default(true);
+            $table->softDeletes();
             $table->timestamps();
             
             $table->index(['category_id', 'order']);

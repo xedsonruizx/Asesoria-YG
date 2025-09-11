@@ -24,7 +24,9 @@ class DatabaseSeeder extends Seeder
             TagCategorySeeder::class,
             PostSeeder::class,
             EvaluationCategorySeeder::class,
-            EvaluationQuestionSeeder::class, // Agregar esta línea
+            EvaluationQuestionSeeder::class,
+            EvaluationSeeder::class,
+            MultaSeeder::class,
         ]);
     }
 }

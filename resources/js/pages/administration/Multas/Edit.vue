@@ -7,7 +7,7 @@ interface Multa {
   id: number;
   name: string;
   description: string;
-  path_file?: string;
+  file_path?: string;
   file_url?: string;
 }
 
@@ -212,14 +212,14 @@ const getFileExtension = (filename?: string) => {
           </div>
 
           <!-- Archivo actual -->
-          <div v-if="multa.path_file && !showRemoveFileConfirm">
+          <div v-if="multa.file_path && !showRemoveFileConfirm">
             <label class="block text-sm font-medium text-foreground mb-2">
               Archivo Actual
             </label>
             <div class="flex items-center gap-3 p-3 bg-muted rounded-md">
               <FileText class="h-8 w-8 text-primary" />
               <div class="flex-1">
-                <div class="font-medium text-foreground">{{ getFileExtension(multa.path_file) }} - Archivo actual</div>
+                <div class="font-medium text-foreground">{{ getFileExtension(multa.file_path) }} - Archivo actual</div>
                 <div class="text-sm text-muted-foreground">Subido el {{ new Date(multa.updated_at).toLocaleDateString('es-ES') }}</div>
               </div>
               <div class="flex gap-2">
@@ -275,7 +275,7 @@ const getFileExtension = (filename?: string) => {
           <!-- Nuevo archivo -->
           <div>
             <label class="block text-sm font-medium text-foreground mb-2">
-              {{ multa.path_file ? 'Reemplazar Archivo' : 'Agregar Archivo' }} (Opcional)
+              {{ multa.file_path ? 'Reemplazar Archivo' : 'Agregar Archivo' }} (Opcional)
             </label>
             
             <!-- Área de drop -->

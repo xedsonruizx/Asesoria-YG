@@ -296,163 +296,48 @@ class PostController extends Controller
     }
 
     /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Post $post)
-    {
-        // Eliminar archivos asociados y carpetas
-        // Usar el slug almacenado en la base de datos o reconstruirlo desde las rutas de archivos
-        $postDirectory = null;
-        
-        // Intentar obtener la carpeta desde las rutas de archivos existentes
-        if ($post->image_path) {
-            $postDirectory = dirname($post->image_path);
-        } elseif ($post->file_path) {
-            $postDirectory = dirname($post->file_path);
-        }
-        
-        // Eliminar archivos individuales primero (si existen)
-        if ($post->image_path && Storage::disk('public')->exists($post->image_path)) {
-            Storage::disk('public')->delete($post->image_path);
-        }
-        
-        if ($post->file_path && Storage::disk('public')->exists($post->file_path)) {
-            Storage::disk('public')->delete($post->file_path);
-        }
-        
-        // Eliminar toda la carpeta del post si se pudo determinar
-        if ($postDirectory && Storage::disk('public')->exists($postDirectory)) {
-            Storage::disk('public')->deleteDirectory($postDirectory);
-        }
-    
-        // Eliminar las relaciones many-to-many con tags
-        $post->tags()->detach();
-        
-        // Eliminar el post de la base de datos
-        $post->delete();
-    
-        return redirect()->route('posts.admin')
-            ->with('success', 'Publicación y archivos asociados eliminados exitosamente.');
-    }
-
-    /**
-     * Cambiar estado de la publicación
-     */
-    public function changeStatus(Request $request, Post $post)
-    {
-        $validated = $request->validate([
-            'status' => 'required|in:draft,published,Delete'
-        ]);
-
-        // Manejar published_at según el nuevo estado
-        $updateData = [
-            'status' => $validated['status']
-        ];
-        
-        // Si se está publicando y no tiene fecha de publicación, establecerla
-        if ($validated['status'] === 'published' && !$post->published_at) {
-            $updateData['published_at'] = now();
-        }
-        
-        // Si se está despublicando (cambiando a draft), mantener la fecha original
-        if ($validated['status'] === 'draft') {
-            // No modificamos published_at para mantener el historial
-        }
-
-        $post->update($updateData);
-
-        return back()->with('success', 'Estado de la publicación actualizado.');
-    }
-
-    /**
-     * Display published posts for clients
-     */
-    public function Index()
-    {
-        $posts = Post::with('tags')
-                    ->where('status', 'published')
-                    ->orderBy('created_at', 'desc')
-                    ->get()
-                    ->map(function ($post) {
-                        return [
-                            'id' => $post->id,
-                            'title' => $post->title,
-                            'content' => $post->content,
-                            'excerpt' => $post->excerpt,
-                            'slug' => $post->slug,
-                            'tags' => $post->tags->map(function ($tag) {
-                                return [
-                                    'id' => $tag->id,
-                                    'name' => $tag->name,
-                                    'slug' => $tag->slug,
-                                    'color' => $tag->color
-                                ];
-                            }),
-                            'status' => $post->status,
-                            'is_premium' => $post->is_premium,
-                            'image_path' => $post->image_path ? asset('storage/' . $post->image_path) : null,
-                            'file_path' => $post->file_path ? asset('storage/' . $post->file_path) : null,
-                            'created_at' => $post->created_at->format('Y-m-d'),
-                            'updated_at' => $post->updated_at->format('Y-m-d')
-                        ];
-                    });
-
-        return Inertia::render('ClientMenu/Post', [
-            'posts' => $posts
-        ]);
-    }
-
-    /**
-     * Eliminar imagen destacada del post
-     */
-    public function removeImage(Post $post)
-    {
-        if ($post->image_path && Storage::disk('public')->exists($post->image_path)) {
-            Storage::disk('public')->delete($post->image_path);
-        }
-        
-        $post->update(['image_path' => null]);
-        
-        return back()->with('success', 'Imagen eliminada exitosamente.');
-    }
-    
-    /**
-     * Eliminar archivo adjunto del post
-     */
-    public function removeFile(Post $post)
-    {
-        if ($post->file_path && Storage::disk('public')->exists($post->file_path)) {
-            Storage::disk('public')->delete($post->file_path);
-        }
-        
-        $post->update(['file_path' => null]);
-        
-        return back()->with('success', 'Archivo eliminado exitosamente.');
-    }
-
-/**
- * Método específico para actualización con archivos via POST
- */
-public function updateWithFiles(UpdatePostRequest $request, Post $post)
-{
-    // Usar la misma lógica que update()
-    return $this->update($request, $post);
-}
-
-
-
-
-}
-
-    /**
      * Remove the specified resource from storage (soft delete).
      */
     public function destroy(Post $post)
     {
         try {
-            $post->delete(); // Soft delete
-
-            return redirect()->route('posts.admin.index')
+            // Eliminar archivos asociados y carpetas
+            $postDirectory = null;
+            
+            // Intentar obtener la carpeta desde las rutas de archivos existentes
+            if ($post->image_path) {
+                $postDirectory = dirname($post->image_path);
+            } elseif ($post->file_path) {
+                $postDirectory = dirname($post->file_path);
+            }
+            
+            // Eliminar archivos individuales primero (si existen)
+            if ($post->image_path && Storage::disk('public')->exists($post->image_path)) {
+                Storage::disk('public')->delete($post->image_path);
+            }
+            
+            if ($post->file_path && Storage::disk('public')->exists($post->file_path)) {
+                Storage::disk('public')->delete($post->file_path);
+            }
+            
+            // Eliminar toda la carpeta del post si se pudo determinar
+            if ($postDirectory && Storage::disk('public')->exists($postDirectory)) {
+                Storage::disk('public')->deleteDirectory($postDirectory);
+            }
+        
+            // Establecer campos de archivo como null antes del soft delete
+            $post->update([
+                'image_path' => null,
+                'file_path' => null
+            ]);
+            
+            // Eliminar las relaciones many-to-many con tags
+            $post->tags()->detach();
+            
+            // Soft delete del post
+            $post->delete();
+        
+            return redirect()->route('posts.admin')
                            ->with('success', 'Post eliminado exitosamente.');
         } catch (\Exception $e) {
             Log::error('Error al eliminar post: ' . $e->getMessage());
@@ -478,6 +363,23 @@ public function updateWithFiles(UpdatePostRequest $request, Post $post)
     }
 
     /**
+     * Permanently delete a post (force delete)
+     */
+    public function forceDelete($id)
+    {
+        try {
+            $post = Post::onlyTrashed()->findOrFail($id);
+            $post->forceDelete();
+
+            return redirect()->route('posts.admin.index')
+                           ->with('success', 'Post eliminado permanentemente.');
+        } catch (\Exception $e) {
+            Log::error('Error al eliminar permanentemente post: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Error al eliminar permanentemente el post.']);
+        }
+    }
+
+    /**
      * Toggle status of post
      */
     public function toggleStatus(Post $post)
@@ -495,3 +397,4 @@ public function updateWithFiles(UpdatePostRequest $request, Post $post)
             return back()->withErrors(['error' => 'Error al cambiar el estado del post.']);
         }
     }
+}

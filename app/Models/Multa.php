@@ -15,7 +15,7 @@ class Multa extends Model
     protected $fillable = [
         'name',
         'description',
-        'path_file',
+        'file_path',
         'is_active'
     ];
 
@@ -47,7 +47,7 @@ class Multa extends Model
      */
     public function getFileUrlAttribute()
     {
-        return $this->path_file ? asset('storage/' . $this->path_file) : null;
+        return $this->file_path ? asset('storage/' . $this->file_path) : null;
     }
 
     /**

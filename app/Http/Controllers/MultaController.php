@@ -75,7 +75,7 @@ class MultaController extends Controller
                 $file = $request->file('file');
                 $fileName = time() . '_' . $file->getClientOriginalName();
                 $filePath = $file->storeAs('multas', $fileName, 'public');
-                $multa->path_file = $filePath;
+                $multa->file_path = $filePath;
             }
 
             $multa->save();
@@ -128,14 +128,14 @@ class MultaController extends Controller
             // Manejar la subida del nuevo archivo
             if ($request->hasFile('file')) {
                 // Eliminar el archivo anterior si existe
-                if ($multa->path_file && Storage::disk('public')->exists($multa->path_file)) {
-                    Storage::disk('public')->delete($multa->path_file);
+                if ($multa->file_path && Storage::disk('public')->exists($multa->file_path)) {
+                    Storage::disk('public')->delete($multa->file_path);
                 }
 
                 $file = $request->file('file');
                 $fileName = time() . '_' . $file->getClientOriginalName();
                 $filePath = $file->storeAs('multas', $fileName, 'public');
-                $multa->path_file = $filePath;
+                $multa->file_path = $filePath;
             }
 
             $multa->save();
@@ -214,8 +214,8 @@ class MultaController extends Controller
             $multa = Multa::onlyTrashed()->findOrFail($id);
             
             // Eliminar el archivo asociado si existe
-            if ($multa->path_file && Storage::disk('public')->exists($multa->path_file)) {
-                Storage::disk('public')->delete($multa->path_file);
+            if ($multa->file_path && Storage::disk('public')->exists($multa->file_path)) {
+                Storage::disk('public')->delete($multa->file_path);
             }
 
             $multa->forceDelete();
@@ -234,9 +234,9 @@ class MultaController extends Controller
     public function removeFile(Multa $multa)
     {
         try {
-            if ($multa->path_file && Storage::disk('public')->exists($multa->path_file)) {
-                Storage::disk('public')->delete($multa->path_file);
-                $multa->path_file = null;
+            if ($multa->file_path && Storage::disk('public')->exists($multa->file_path)) {
+                Storage::disk('public')->delete($multa->file_path);
+                $multa->file_path = null;
                 $multa->save();
             }
 

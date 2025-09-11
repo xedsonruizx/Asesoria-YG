@@ -14,7 +14,7 @@ interface Multa {
   id: number;
   name: string;
   description: string;
-  path_file?: string;
+  file_path?: string;
   file_url?: string;
   is_active: boolean;
   status_text: string;

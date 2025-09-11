@@ -11,7 +11,7 @@ interface Multa {
   id: number;
   name: string;
   description: string;
-  path_file?: string;
+  file_path?: string;
   questions_count?: number;
   created_at: string;
   updated_at: string;
@@ -86,7 +86,7 @@ const deleteMulta = () => {
               {{ multa.description }}
             </p>
             <div class="flex items-center gap-4 text-sm text-muted-foreground">
-              <span v-if="multa.path_file" class="text-blue-600">
+              <span v-if="multa.file_path" class="text-blue-600">
                 📎 Archivo adjunto
               </span>
               <span :class="(multa.questions_count || 0) > 0 ? 'text-destructive font-medium' : 'text-muted-foreground'">

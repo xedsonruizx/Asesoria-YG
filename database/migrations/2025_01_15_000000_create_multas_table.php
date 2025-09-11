@@ -15,11 +15,14 @@ return new class extends Migration
             $table->id();
             $table->string('name', 255);
             $table->text('description');
-            $table->string('path_file')->nullable();
+            $table->string('file_path')->nullable();
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
+            $table->softDeletes();
             
             // Índices para mejorar el rendimiento
             $table->index('name');
+            $table->index('is_active');
         });
     }
 

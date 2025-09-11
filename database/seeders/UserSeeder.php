@@ -23,13 +23,48 @@ class UserSeeder extends Seeder
             'name' => 'Administrador',
             'email' => 'admin@admin.cl',
             'password' => Hash::make('123456789'),
-            'email_verified_at' => null, // Usuario no verificado inicialmente
+            'email_verified_at' => null,
             'created_at' => DB::raw('NOW()'),
             'updated_at' => DB::raw('NOW()'),
             'ispremium' => true,
+            'is_active' => true,
         ]);
 
-        $this->command->info('Usuario administrador creado correctamente.');
+        // Crear usuarios adicionales
+        DB::table('users')->insert([
+            [
+                'name' => 'Usuario Premium',
+                'email' => 'premium@test.cl',
+                'password' => Hash::make('123456789'),
+                'email_verified_at' => DB::raw('NOW()'),
+                'created_at' => DB::raw('NOW()'),
+                'updated_at' => DB::raw('NOW()'),
+                'ispremium' => true,
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Usuario Regular',
+                'email' => 'user@test.cl',
+                'password' => Hash::make('123456789'),
+                'email_verified_at' => DB::raw('NOW()'),
+                'created_at' => DB::raw('NOW()'),
+                'updated_at' => DB::raw('NOW()'),
+                'ispremium' => false,
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Usuario Inactivo',
+                'email' => 'inactive@test.cl',
+                'password' => Hash::make('123456789'),
+                'email_verified_at' => null,
+                'created_at' => DB::raw('NOW()'),
+                'updated_at' => DB::raw('NOW()'),
+                'ispremium' => false,
+                'is_active' => false,
+            ]
+        ]);
+
+        $this->command->info('Usuarios creados correctamente.');
         $this->command->info('Email: admin@admin.cl');
         $this->command->info('Contraseña: 123456789');
     }
