@@ -11,6 +11,7 @@ interface Post {
   id: number;
   title: string;
   content: string;
+  slug: string; // ✅ Agregar esta propiedad
   tags?: Array<{
     id: number;
     name: string;
@@ -83,7 +84,7 @@ const truncateContent = (content: string, maxLength: number = 100) => {
 
 // Función para navegar a la vista detallada
 const viewPost = (post: Post) => {
-  window.location.href = postShow(post.id).url;
+  window.location.href = postShow(post.slug).url; // ✅ Usando slug
 };
 
 // Función para navegar a crear nueva publicación

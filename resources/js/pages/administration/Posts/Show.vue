@@ -43,7 +43,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
     {
         title: props.post.title,
-        href: postShow(props.post.slug).url,
+        href: postShow(props.post.slug).url, // Usar slug en lugar de ID
     },
 ];
 
