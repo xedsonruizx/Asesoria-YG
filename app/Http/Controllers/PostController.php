@@ -23,6 +23,20 @@ class PostController extends Controller
     {
         $query = Post::with('tags');
 
+        // Filtro para mostrar eliminados
+        if ($request->filled('show_deleted')) {
+            if ($request->show_deleted === 'only') {
+                $query->onlyTrashed();
+            } elseif ($request->show_deleted === 'with') {
+                $query->withTrashed();
+            }
+        }
+
+        // Filtro por estado activo/inactivo
+        if ($request->filled('is_active')) {
+            $query->where('is_active', $request->boolean('is_active'));
+        }
+
         // Filtrar por tags si se proporciona
         if ($request->filled('tag_id')) {
             $query->withTags([$request->tag_id]);
@@ -44,7 +58,7 @@ class PostController extends Controller
         return Inertia::render('administration/Post', [
             'posts' => $posts,
             'tags' => $tags,
-            'filters' => $request->only(['tag_id', 'status', 'search'])
+            'filters' => $request->only(['tag_id', 'status', 'search', 'show_deleted', 'is_active'])
         ]);
     }
 
@@ -66,7 +80,11 @@ class PostController extends Controller
     public function store(StorePostRequest $request)
     {
         $validated = $request->validated();
-        Log::info("store");
+        
+        // Establecer is_active = true por defecto si no se proporciona
+        if (!isset($validated['is_active'])) {
+            $validated['is_active'] = true;
+        }
         // Crear un slug único para la carpeta basado en el título
         $postSlug = Str::slug($validated['title']) . '-' . time();
         
@@ -425,3 +443,55 @@ public function updateWithFiles(UpdatePostRequest $request, Post $post)
 
 
 }
+
+    /**
+     * Remove the specified resource from storage (soft delete).
+     */
+    public function destroy(Post $post)
+    {
+        try {
+            $post->delete(); // Soft delete
+
+            return redirect()->route('posts.admin.index')
+                           ->with('success', 'Post eliminado exitosamente.');
+        } catch (\Exception $e) {
+            Log::error('Error al eliminar post: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Error al eliminar el post.']);
+        }
+    }
+
+    /**
+     * Restore a soft deleted post
+     */
+    public function restore($id)
+    {
+        try {
+            $post = Post::onlyTrashed()->findOrFail($id);
+            $post->restore();
+
+            return redirect()->route('posts.admin.index')
+                           ->with('success', 'Post restaurado exitosamente.');
+        } catch (\Exception $e) {
+            Log::error('Error al restaurar post: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Error al restaurar el post.']);
+        }
+    }
+
+    /**
+     * Toggle status of post
+     */
+    public function toggleStatus(Post $post)
+    {
+        try {
+            $post->update([
+                'is_active' => !$post->is_active
+            ]);
+
+            $status = $post->is_active ? 'activado' : 'desactivado';
+            return redirect()->route('posts.admin.index')
+                           ->with('success', "Post {$status} exitosamente.");
+        } catch (\Exception $e) {
+            Log::error('Error al cambiar estado de post: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Error al cambiar el estado del post.']);
+        }
+    }

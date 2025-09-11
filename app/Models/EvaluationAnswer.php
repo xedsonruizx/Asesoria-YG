@@ -5,20 +5,24 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class EvaluationAnswer extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'evaluation_id',
         'question_id',
         'answer_value',
         'points_earned',
+        'is_active',
     ];
 
     protected $casts = [
         'answer_value' => 'array',
+        'is_active' => 'boolean',
+        'deleted_at' => 'datetime',
     ];
 
     public function evaluation(): BelongsTo

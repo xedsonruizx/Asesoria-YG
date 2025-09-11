@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Evaluation extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'user_id',
@@ -22,6 +23,7 @@ class Evaluation extends Model
         'completed_at',
         'expires_at',
         'metadata',
+        'is_active',
     ];
 
     protected $casts = [
@@ -31,6 +33,8 @@ class Evaluation extends Model
         'completed_at' => 'datetime',
         'expires_at' => 'datetime',
         'metadata' => 'array',
+        'is_active' => 'boolean',
+        'deleted_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

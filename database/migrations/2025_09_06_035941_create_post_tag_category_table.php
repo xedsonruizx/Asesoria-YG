@@ -12,11 +12,14 @@ return new class extends Migration
             $table->id();
             $table->foreignId('post_id')->constrained()->onDelete('cascade');
             $table->foreignId('tag_category_id')->constrained('tags_category')->onDelete('cascade');
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
+            $table->softDeletes();
             
             $table->unique(['post_id', 'tag_category_id']);
             $table->index(['post_id']);
             $table->index(['tag_category_id']);
+            $table->index(['is_active']);
         });
     }
 

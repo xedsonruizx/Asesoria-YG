@@ -16,6 +16,15 @@ class TagCategoryController extends Controller
     {
         $query = TagCategory::query();
 
+        // Filtro para mostrar eliminados
+        if ($request->filled('show_deleted')) {
+            if ($request->show_deleted === 'only') {
+                $query->onlyTrashed();
+            } elseif ($request->show_deleted === 'with') {
+                $query->withTrashed();
+            }
+        }
+
         // Búsqueda
         if ($request->filled('search')) {
             $query->search($request->search);
@@ -41,7 +50,7 @@ class TagCategoryController extends Controller
                 'from' => $categories->firstItem() ?? 0,
                 'to' => $categories->lastItem() ?? 0,
             ],
-            'filters' => $request->only(['search', 'status'])
+            'filters' => $request->only(['search', 'status', 'show_deleted'])
         ]);
     }
 
@@ -132,18 +141,59 @@ class TagCategoryController extends Controller
         }
     }
 
-    public function destroy(TagCategory $post_category)  // Cambiar de $postCategory a $post_category
+    public function destroy(TagCategory $post_category)
     {
-        // Verificar si tiene posts asociados
-        if ($post_category->posts()->count() > 0) {
+        try {
+            // Verificar si tiene posts asociados
+            if ($post_category->posts()->count() > 0) {
+                return redirect()->route('post-categories.index')
+                               ->with('error', 'No se puede eliminar la categoría porque tiene posts asociados.');
+            }
+        
+            $post_category->delete(); // Soft delete
+        
             return redirect()->route('post-categories.index')
-                           ->with('error', 'No se puede eliminar la categoría porque tiene posts asociados.');
+                            ->with('success', 'Categoría eliminada exitosamente.');
+        } catch (\Exception $e) {
+            Log::error('Error al eliminar categoría: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Error al eliminar la categoría.']);
         }
-    
-        $post_category->delete();
-    
-        return redirect()->route('post-categories.index')
-                        ->with('success', 'Categoría eliminada exitosamente.');
+    }
+
+    /**
+     * Restore a soft deleted category
+     */
+    public function restore($id)
+    {
+        try {
+            $category = TagCategory::onlyTrashed()->findOrFail($id);
+            $category->restore();
+
+            return redirect()->route('post-categories.index')
+                           ->with('success', 'Categoría restaurada exitosamente.');
+        } catch (\Exception $e) {
+            Log::error('Error al restaurar categoría: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Error al restaurar la categoría.']);
+        }
+    }
+
+    /**
+     * Toggle status of category
+     */
+    public function toggleStatus(TagCategory $postCategory)
+    {
+        try {
+            $postCategory->update([
+                'is_active' => !$postCategory->is_active
+            ]);
+
+            $status = $postCategory->is_active ? 'activada' : 'desactivada';
+            return redirect()->route('post-categories.index')
+                           ->with('success', "Categoría {$status} exitosamente.");
+        } catch (\Exception $e) {
+            Log::error('Error al cambiar estado de categoría: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Error al cambiar el estado de la categoría.']);
+        }
     }
 
     // API para obtener tags activos (para selects)

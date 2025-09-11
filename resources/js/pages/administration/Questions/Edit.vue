@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { type BreadcrumbItem } from '@/types';
 import QuestionDependency from '@/components/QuestionDependency.vue';
+import MultaAssignment from '@/components/MultaAssignment.vue';
 import QuestionTypeInputs from '@/components/MyComponents/QuestionInputs/QuestionTypeInputs.vue';
 
 interface QuestionOption {
@@ -31,6 +32,11 @@ interface QuestionForm {
         parent_question_id?: number;
         operator?: string;
         value?: string;
+    };
+    multa_condition?: {
+        multa_id?: number;
+        trigger_condition?: string;
+        trigger_value?: string;
     };
     validation_rules?: any;
     is_required: boolean;
@@ -75,7 +81,8 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 // Variable reactiva para manejar dependencias - CORREGIR ESTA LÍNEA
-const hasDependency = ref(false); // Inicializar como false temporalmente
+const hasDependency = ref(false);
+const hasMultaAssignment = ref(false);
 
 // Función para convertir opciones al formato correcto
 const convertOptionsToCorrectFormat = (options: any): QuestionOption[] => {
@@ -287,6 +294,17 @@ watch(() => form.question_type, () => {
     form.points = 1;
   }
 });
+// Inicializar hasMultaAssignment basado en los datos existentes
+onMounted(() => {
+    if (props.question.show_condition?.parent_question_id) {
+        hasDependency.value = true;
+    }
+    
+    // Verificar si la pregunta tiene asignación de multa
+    if (props.question.multa_condition?.multa_id) {
+        hasMultaAssignment.value = true;
+    }
+});
 </script>
 
 <template>
@@ -426,10 +444,18 @@ watch(() => form.question_type, () => {
 
                                 <!-- Dependencias de pregunta -->
                                 <QuestionDependency
-                                  v-model="hasDependency"
-                                  v-model:show-condition="form.show_condition"
-                                  :category-id="form.category_id"
-                                  :errors="form.errors"
+                                    v-model="hasDependency"
+                                    v-model:show-condition="form.show_condition"
+                                    :category-id="form.category_id"
+                                    :exclude-question-id="question.id"
+                                    :errors="form.errors"
+                                />
+
+                                <!-- Asignación de multas -->
+                                <MultaAssignment
+                                    v-model="hasMultaAssignment"
+                                    v-model:multa-condition="form.multa_condition"
+                                    :errors="form.errors"
                                 />
 
                                 <!-- Checkboxes -->

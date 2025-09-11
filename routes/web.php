@@ -11,6 +11,7 @@ use App\Http\Controllers\EvaluationController;
 use App\Http\Controllers\EvaluationAdminController;
 use App\Http\Controllers\EvaluationQuestionController;
 use App\Http\Controllers\EvaluationCategoryController; // Agregar esta línea
+use App\Http\Controllers\MultaController;
 
 // ============================================
 // RUTAS PÚBLICAS (SIN AUTENTICACIÓN)
@@ -99,6 +100,13 @@ Route::middleware(['auth'])->group(function () {
     // Rutas que requieren permiso 'guest' (solo ver)
     Route::middleware(['permission:guest'])->group(function () {
         // Rutas de solo lectura si las necesitas
+        // Resource para multas
+        Route::resource('multas', MultaController::class);
+        Route::patch('/multas/{multa}/toggle-status', [MultaController::class, 'toggleStatus'])->name('multas.toggle-status');
+        Route::patch('/multas/{id}/restore', [MultaController::class, 'restore'])->name('multas.restore');
+        Route::delete('/multas/{id}/force-delete', [MultaController::class, 'forceDelete'])->name('multas.force-delete');
+        Route::get('api/multas', [MultaController::class, 'apiIndex'])->name('api.multas.index');
+        Route::delete('/multas/{multa}/remove-file', [MultaController::class, 'removeFile'])->name('multas.remove-file');
     });
 });
 

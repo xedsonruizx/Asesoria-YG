@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import InputError from '@/components/InputError.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import QuestionDependency from '@/components/QuestionDependency.vue';
+import MultaAssignment from '@/components/MultaAssignment.vue';
 import { type BreadcrumbItem } from '@/types';
 import QuestionTypeInputs from '@/components/MyComponents/QuestionInputs/QuestionTypeInputs.vue';
 
@@ -40,6 +41,11 @@ interface QuestionForm {
   points: number;
   order: number;
   show_condition: any;
+  multa_condition: {
+    multa_id: number | null;
+    trigger_condition: string;
+    trigger_value: string | null;
+  };
   validation_rules: any;
   is_required: boolean;
   is_active: boolean;
@@ -56,6 +62,7 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const hasDependency = ref(false);
+const hasMultaAssignment = ref(false);
 
 const form = useForm<QuestionForm>({
   category_id: null,
@@ -71,6 +78,11 @@ const form = useForm<QuestionForm>({
     parent_question_id: null,
     operator: 'equals',
     value: null
+  },
+  multa_condition: {
+    multa_id: null,
+    trigger_condition: 'always',
+    trigger_value: null
   },
   validation_rules: null,
   is_required: true,
@@ -347,6 +359,13 @@ watch(hasDependency, (newValue) => {
                   v-model="hasDependency"
                   v-model:show-condition="form.show_condition"
                   :category-id="form.category_id"
+                  :errors="form.errors"
+                />
+
+                <!-- Asignación de multas -->
+                <MultaAssignment
+                  v-model="hasMultaAssignment"
+                  v-model:multa-condition="form.multa_condition"
                   :errors="form.errors"
                 />
 

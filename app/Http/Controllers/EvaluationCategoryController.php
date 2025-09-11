@@ -16,6 +16,15 @@ class EvaluationCategoryController extends Controller
     {
         $query = EvaluationCategory::query();
 
+        // Filtro para mostrar eliminados
+        if ($request->filled('show_deleted')) {
+            if ($request->show_deleted === 'only') {
+                $query->onlyTrashed();
+            } elseif ($request->show_deleted === 'with') {
+                $query->withTrashed();
+            }
+        }
+
         // Búsqueda
         if ($request->filled('search')) {
             $query->where(function ($q) use ($request) {
@@ -44,7 +53,7 @@ class EvaluationCategoryController extends Controller
                 'from' => $categories->firstItem() ?? 0,
                 'to' => $categories->lastItem() ?? 0,
             ],
-            'filters' => $request->only(['search', 'status'])
+            'filters' => $request->only(['search', 'status', 'show_deleted'])
         ]);
     }
 
@@ -140,18 +149,76 @@ class EvaluationCategoryController extends Controller
         }
     }
 
-    public function destroy(EvaluationCategory $question_category)
+    public function destroy(EvaluationCategory $evaluationCategory)
     {
-        // Verificar si tiene preguntas asociadas
-        if ($question_category->questions()->count() > 0) {
-            return redirect()->route('question-categories.index')
-                           ->with('error', 'No se puede eliminar la categoría porque tiene preguntas asociadas.');
+        try {
+            // Verificar si tiene preguntas asociadas
+            if ($evaluationCategory->allQuestions()->count() > 0) {
+                return redirect()->route('evaluation-categories.index')
+                               ->with('error', 'No se puede eliminar la categoría porque tiene preguntas asociadas.');
+            }
+
+            $evaluationCategory->delete(); // Soft delete
+
+            return redirect()->route('evaluation-categories.index')
+                           ->with('success', 'Categoría eliminada exitosamente.');
+        } catch (\Exception $e) {
+            Log::error('Error al eliminar categoría: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Error al eliminar la categoría.']);
         }
-    
-        $question_category->delete();
-    
-        return redirect()->route('question-categories.index')
-                        ->with('success', 'Categoría de evaluación eliminada exitosamente.');
+    }
+
+    /**
+     * Restore a soft deleted category
+     */
+    public function restore($id)
+    {
+        try {
+            $category = EvaluationCategory::onlyTrashed()->findOrFail($id);
+            $category->restore();
+
+            return redirect()->route('evaluation-categories.index')
+                           ->with('success', 'Categoría restaurada exitosamente.');
+        } catch (\Exception $e) {
+            Log::error('Error al restaurar categoría: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Error al restaurar la categoría.']);
+        }
+    }
+
+    /**
+     * Force delete a category
+     */
+    public function forceDelete($id)
+    {
+        try {
+            $category = EvaluationCategory::onlyTrashed()->findOrFail($id);
+            $category->forceDelete();
+
+            return redirect()->route('evaluation-categories.index')
+                           ->with('success', 'Categoría eliminada permanentemente.');
+        } catch (\Exception $e) {
+            Log::error('Error al eliminar permanentemente categoría: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Error al eliminar permanentemente la categoría.']);
+        }
+    }
+
+    /**
+     * Toggle status of category
+     */
+    public function toggleStatus(EvaluationCategory $evaluationCategory)
+    {
+        try {
+            $evaluationCategory->update([
+                'is_active' => !$evaluationCategory->is_active
+            ]);
+
+            $status = $evaluationCategory->is_active ? 'activada' : 'desactivada';
+            return redirect()->route('evaluation-categories.index')
+                           ->with('success', "Categoría {$status} exitosamente.");
+        } catch (\Exception $e) {
+            Log::error('Error al cambiar estado de categoría: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Error al cambiar el estado de la categoría.']);
+        }
     }
 
     // API para obtener categorías activas (para selects)

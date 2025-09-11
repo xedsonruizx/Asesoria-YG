@@ -18,6 +18,20 @@ class EvaluationAdminController extends Controller
     {
         $query = Evaluation::with(['user']);
         
+        // Filtro para mostrar eliminados
+        if ($request->filled('show_deleted')) {
+            if ($request->show_deleted === 'only') {
+                $query->onlyTrashed();
+            } elseif ($request->show_deleted === 'with') {
+                $query->withTrashed();
+            }
+        }
+        
+        // Filtro por estado activo/inactivo
+        if ($request->filled('is_active')) {
+            $query->where('is_active', $request->boolean('is_active'));
+        }
+        
         // Filtro por usuario
         if ($request->filled('user')) {
             $userFilter = $request->user;
@@ -34,6 +48,8 @@ class EvaluationAdminController extends Controller
             'completed' => Evaluation::where('status', 'completed')->count(),
             'in_progress' => Evaluation::where('status', 'in_progress')->count(),
             'draft' => Evaluation::where('status', 'draft')->count(),
+            'active' => Evaluation::where('is_active', true)->count(),
+            'inactive' => Evaluation::where('is_active', false)->count(),
         ];
     
         $categories = EvaluationCategory::active()->ordered()->get();
@@ -42,7 +58,7 @@ class EvaluationAdminController extends Controller
             'evaluations' => $evaluations,
             'stats' => $stats,
             'categories' => $categories,
-            'filters' => $request->only(['user']) // Pasar filtros al frontend
+            'filters' => $request->only(['user', 'show_deleted', 'is_active'])
         ]);
     }
 
@@ -148,11 +164,53 @@ class EvaluationAdminController extends Controller
      */
     public function destroy(string $id)
     {
-        $evaluation = Evaluation::findOrFail($id);
-        $evaluation->delete();
+        try {
+            $evaluation = Evaluation::findOrFail($id);
+            $evaluation->delete(); // Soft delete
 
-        return redirect()->route('admin.evaluations.index')
-            ->with('success', 'Evaluación eliminada exitosamente.');
+            return redirect()->route('admin.evaluations.index')
+                           ->with('success', 'Evaluación eliminada exitosamente.');
+        } catch (\Exception $e) {
+            Log::error('Error al eliminar evaluación: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Error al eliminar la evaluación.']);
+        }
+    }
+
+    /**
+     * Restore a soft deleted evaluation
+     */
+    public function restore($id)
+    {
+        try {
+            $evaluation = Evaluation::onlyTrashed()->findOrFail($id);
+            $evaluation->restore();
+
+            return redirect()->route('admin.evaluations.index')
+                           ->with('success', 'Evaluación restaurada exitosamente.');
+        } catch (\Exception $e) {
+            Log::error('Error al restaurar evaluación: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Error al restaurar la evaluación.']);
+        }
+    }
+
+    /**
+     * Toggle status of evaluation
+     */
+    public function toggleStatus($id)
+    {
+        try {
+            $evaluation = Evaluation::findOrFail($id);
+            $evaluation->update([
+                'is_active' => !$evaluation->is_active
+            ]);
+
+            $status = $evaluation->is_active ? 'activada' : 'desactivada';
+            return redirect()->route('admin.evaluations.index')
+                           ->with('success', "Evaluación {$status} exitosamente.");
+        } catch (\Exception $e) {
+            Log::error('Error al cambiar estado de evaluación: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Error al cambiar el estado de la evaluación.']);
+        }
     }
 
     /**

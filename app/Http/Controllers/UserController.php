@@ -14,11 +14,35 @@ class UserController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $users = User::with(['roles', 'evaluations' => function($query) {
+        $query = User::with(['roles', 'evaluations' => function($query) {
             $query->where('status', 'completed');
-        }])->latest()->paginate(10);
+        }]);
+
+        // Filtro para mostrar eliminados
+        if ($request->filled('show_deleted')) {
+            if ($request->show_deleted === 'only') {
+                $query->onlyTrashed();
+            } elseif ($request->show_deleted === 'with') {
+                $query->withTrashed();
+            }
+        }
+
+        // Filtro por estado activo/inactivo
+        if ($request->filled('is_active')) {
+            $query->where('is_active', $request->boolean('is_active'));
+        }
+
+        // Búsqueda por nombre o email
+        if ($request->filled('search')) {
+            $query->where(function($q) use ($request) {
+                $q->where('name', 'like', '%' . $request->search . '%')
+                  ->orWhere('email', 'like', '%' . $request->search . '%');
+            });
+        }
+
+        $users = $query->latest()->paginate(10);
 
         // Calcular puntos para cada usuario
         $users->getCollection()->transform(function ($user) {
@@ -48,7 +72,8 @@ class UserController extends Controller
         });
 
         return Inertia::render('administration/Users/Index', [
-            'users' => $users
+            'users' => $users,
+            'filters' => $request->only(['search', 'show_deleted', 'is_active'])
         ]);
     }
 
@@ -74,6 +99,7 @@ class UserController extends Controller
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8|confirmed',
             'ispremium' => 'boolean',
+            'is_active' => 'boolean',
             'role' => 'required|string|exists:roles,name'
         ]);
 
@@ -81,7 +107,8 @@ class UserController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'password' => bcrypt($request->password),
-            'ispremium' => $request->boolean('ispremium', false)
+            'ispremium' => $request->boolean('ispremium'),
+            'is_active' => $request->boolean('is_active', true), // Default true
         ]);
         
         // Asignar el rol al usuario
@@ -156,5 +183,57 @@ class UserController extends Controller
 
         return redirect()->route('users.index')
             ->with('success', 'Usuario eliminado exitosamente.');
+    }
+
+    /**
+     * Remove the specified resource from storage (soft delete).
+     */
+    public function destroy(User $user)
+    {
+        try {
+            $user->delete(); // Soft delete
+
+            return redirect()->route('users.index')
+                           ->with('success', 'Usuario eliminado exitosamente.');
+        } catch (\Exception $e) {
+            Log::error('Error al eliminar usuario: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Error al eliminar el usuario.']);
+        }
+    }
+
+    /**
+     * Restore a soft deleted user
+     */
+    public function restore($id)
+    {
+        try {
+            $user = User::onlyTrashed()->findOrFail($id);
+            $user->restore();
+
+            return redirect()->route('users.index')
+                           ->with('success', 'Usuario restaurado exitosamente.');
+        } catch (\Exception $e) {
+            Log::error('Error al restaurar usuario: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Error al restaurar el usuario.']);
+        }
+    }
+
+    /**
+     * Toggle status of user
+     */
+    public function toggleStatus(User $user)
+    {
+        try {
+            $user->update([
+                'is_active' => !$user->is_active
+            ]);
+
+            $status = $user->is_active ? 'activado' : 'desactivado';
+            return redirect()->route('users.index')
+                           ->with('success', "Usuario {$status} exitosamente.");
+        } catch (\Exception $e) {
+            Log::error('Error al cambiar estado de usuario: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Error al cambiar el estado del usuario.']);
+        }
     }
 }

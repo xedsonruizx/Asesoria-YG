@@ -15,8 +15,10 @@ return new class extends Migration
             $table->json('answer_value'); // Valor de la respuesta (puede ser string, array, etc.)
             $table->integer('points_earned')->default(0);
             $table->decimal('completion_time', 8, 2)->nullable(); // Tiempo en segundos para responder
+            $table->boolean('is_active')->default(true);
             $table->json('metadata')->nullable(); // Datos adicionales (IP, user agent, etc.)
             $table->timestamps();
+            $table->softDeletes();
             
             $table->unique(['evaluation_id', 'question_id']);
             $table->index(['evaluation_id', 'question_id']);

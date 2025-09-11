@@ -26,6 +26,7 @@ class EvaluationController extends Controller
                 'total_score' => 0,
                 'total_progress' => 0,
                 'status' => 'draft',
+                'is_active' => true, // Agregar campo is_active
             ]);
         }
     
