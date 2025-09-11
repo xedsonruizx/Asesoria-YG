@@ -43,6 +43,9 @@ Route::middleware(['auth'])->group(function () {
         // Rutas adicionales para posts
         Route::post('posts/{post}/update-with-files', [PostController::class, 'updateWithFiles'])->name('posts.update-files');
         Route::patch('posts/{post}/status', [PostController::class, 'changeStatus'])->name('posts.change-status');
+        Route::patch('posts/{post}/toggle-status', [PostController::class, 'toggleStatus'])->name('posts.toggle-status');
+        Route::patch('posts/{id}/restore', [PostController::class, 'restore'])->name('posts.restore');
+        Route::delete('posts/{id}/force-delete', [PostController::class, 'forceDelete'])->name('posts.force-delete');
         Route::delete('/posts/{post}/remove-image', [PostController::class, 'removeImage'])->name('posts.remove-image');
         Route::delete('/posts/{post}/remove-file', [PostController::class, 'removeFile'])->name('posts.remove-file');
     
@@ -51,6 +54,9 @@ Route::middleware(['auth'])->group(function () {
         
         // Resource para tags
         Route::resource('tags', TagCategoryController::class);
+        Route::patch('tags/{tag}/toggle-status', [TagCategoryController::class, 'toggleStatus'])->name('tags.toggle-status');
+        Route::patch('tags/{id}/restore', [TagCategoryController::class, 'restore'])->name('tags.restore');
+        Route::delete('tags/{id}/force-delete', [TagCategoryController::class, 'forceDelete'])->name('tags.force-delete');
         Route::get('api/tags', [TagCategoryController::class, 'apiIndex'])->name('api.tags.index');
         
         // Resource para categorías de posts
@@ -59,6 +65,9 @@ Route::middleware(['auth'])->group(function () {
 
         // Resource para categorías de evaluación
         Route::resource('question-categories', EvaluationCategoryController::class);
+        Route::patch('question-categories/{category}/toggle-status', [EvaluationCategoryController::class, 'toggleStatus'])->name('question-categories.toggle-status');
+        Route::patch('question-categories/{id}/restore', [EvaluationCategoryController::class, 'restore'])->name('question-categories.restore');
+        Route::delete('question-categories/{id}/force-delete', [EvaluationCategoryController::class, 'forceDelete'])->name('question-categories.force-delete');
         Route::get('api/question-categories', [EvaluationCategoryController::class, 'apiIndex'])->name('api.question-categories.index');
 
         // Rutas administrativas para evaluaciones
@@ -72,6 +81,9 @@ Route::middleware(['auth'])->group(function () {
             'destroy' => 'admin.evaluations.destroy'
         ]);
         Route::post('evaluations/{evaluation}/reset', [EvaluationAdminController::class, 'reset'])->name('admin.evaluations.reset');
+        Route::patch('evaluations/{evaluation}/toggle-status', [EvaluationAdminController::class, 'toggleStatus'])->name('admin.evaluations.toggle-status');
+        Route::patch('evaluations/{id}/restore', [EvaluationAdminController::class, 'restore'])->name('admin.evaluations.restore');
+        Route::delete('evaluations/{id}/force-delete', [EvaluationAdminController::class, 'forceDelete'])->name('admin.evaluations.force-delete');
         Route::get('/evaluations/{id}/pdf', [EvaluationAdminController::class, 'generatePdf'])->name('admin.evaluations.pdf');
     
         // Rutas específicas ANTES del resource route
