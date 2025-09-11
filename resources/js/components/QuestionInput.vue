@@ -11,7 +11,7 @@ interface Question {
     max_value?: number;
     points: number;
     show_condition?: any;
-    order: number;
+    order: number; // Mantener para ordenamiento visual
     is_active: boolean;
     is_required: boolean;
 }
@@ -63,7 +63,7 @@ const getOptionsArray = computed(() => {
         typeof options[0] === 'object' && 
         'text' in options[0]) {
         const result = options as Array<{text: string, points: number}>;
-        console.log('Parsed options for question', props.question.id, ':', result);
+        // console.log('Parsed options for question', props.question.id, ':', result);
         return result;
     }
     
@@ -131,15 +131,16 @@ const handleCheckboxChange = (option: string, checked: boolean) => {
     <div class="space-y-3">
         <label class="block text-sm font-medium text-gray-700 dark:text-white">
             {{ question.question_text }}
-            <span v-if="question.points" class="text-xs text-gray-500 ml-1">
+            <!-- <span v-if="question.points" class="text-xs text-gray-500 ml-1">
                 ({{ question.points }} puntos)
-            </span>
+            </span> -->
         </label>
 
         <!-- Campo de texto -->
         <input
             v-if="question.question_type === 'text'"
             v-model="value"
+            :required="question.is_required"
             type="text"
             :placeholder="question.placeholder || 'Ingrese su respuesta'"
             class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -149,6 +150,7 @@ const handleCheckboxChange = (option: string, checked: boolean) => {
         <textarea
             v-else-if="question.question_type === 'textarea'"
             v-model="value"
+            :required="question.is_required"
             :placeholder="question.placeholder || 'Ingrese su respuesta detallada'"
             rows="4"
             class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -160,16 +162,17 @@ const handleCheckboxChange = (option: string, checked: boolean) => {
                 v-model="value"
                 class="mt-1 block w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white appearance-none cursor-pointer"
             >
-                <option value="" disabled>Seleccione una opción</option>
+                <option value="" >Seleccione una opción</option>
                 <option 
                     v-for="option in getOptionsArray" 
                     :key="getOptionValue(option)" 
                     :value="getOptionValue(option)"
+                    :required="question.is_required"
                 >
                     {{ getOptionText(option) }}
-                    <span v-if="option.points !== undefined" class="text-xs text-gray-500">
+                    <!-- <span v-if="option.points !== undefined" class="text-xs text-gray-500">
                         ({{ option.points }} puntos)
-                    </span>
+                    </span> -->
                 </option>
             </select>
             <!-- Flecha personalizada -->
@@ -188,6 +191,7 @@ const handleCheckboxChange = (option: string, checked: boolean) => {
                 class="flex items-center cursor-pointer"
             >
                 <input
+                    :required="question.is_required"
                     type="radio"
                     :name="`question_${question.id}`"
                     :value="getOptionValue(option)"
@@ -196,9 +200,9 @@ const handleCheckboxChange = (option: string, checked: boolean) => {
                 />
                 <span class="ml-2 text-sm text-gray-700 dark:text-white">
                     {{ getOptionText(option) }}
-                    <span v-if="option.points !== undefined" class="text-xs text-gray-500 ml-1">
+                    <!-- <span v-if="option.points !== undefined" class="text-xs text-gray-500 ml-1">
                         ({{ option.points }} puntos)
-                    </span>
+                    </span> -->
                 </span>
             </label>
         </div>
@@ -230,16 +234,16 @@ const handleCheckboxChange = (option: string, checked: boolean) => {
                 />
                 <span class="ml-2 text-sm text-gray-700 dark:text-white">
                     {{ getOptionText(option) }}
-                    <span v-if="option.points !== undefined" class="text-xs text-gray-500 ml-1">
+                    <!-- <span v-if="option.points !== undefined" class="text-xs text-gray-500 ml-1">
                         ({{ option.points }} puntos)
-                    </span>
+                    </span> -->
                 </span>
             </label>
         </div>
 
         <!-- Indicador de respuesta requerida -->
-        <div v-if="shouldShowRequiredIndicator" class="text-xs text-gray-400">
+        <!-- <div v-if="shouldShowRequiredIndicator" class="text-xs text-gray-400">
             * Campo requerido
-        </div>
+        </div> -->
     </div>
 </template>

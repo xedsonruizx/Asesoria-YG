@@ -29,9 +29,10 @@ interface Question {
     points: number;
     order: number;
     show_condition?: {
-        parent_question_id: number;
+        parent_question_id: number | null; // Ahora será el ID de la pregunta padre
         operator: string;
         expected_value: any;
+        value?: any;
     };
     validation_rules?: any;
     is_required: boolean;
@@ -179,14 +180,14 @@ const questionDependencyInfo = computed(() => {
         // Si tiene respuestas asociadas (otras preguntas dependen de esta)
         const dependents = props.questions?.filter(q =>
             q.show_condition &&
-            q.show_condition.parent_question_id === question.id
+            q.show_condition.parent_question_id === question.id // Usar ID en lugar de order
         ) || [];
 
         if (dependents && dependents.length > 0) {
-            // Mostrar los números de orden de las preguntas que dependen de esta
+            // Mostrar los órdenes de las preguntas que dependen de esta
             const dependentOrders = dependents.map(q => q.order).sort((a, b) => a - b);
             dependencies.push({
-                text: `Dependen de pregunta orden: ${dependentOrders.join(', ')}`,
+                text: `Dependen de pregunta Orden: ${dependentOrders.join(', ')}`,
                 class: 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300'
             });
             canDelete = false;
@@ -196,13 +197,12 @@ const questionDependencyInfo = computed(() => {
         if (question.show_condition) {
             const parentQuestionId = question.show_condition.parent_question_id;
             const operator = question.show_condition.operator || 'equals';
-            const expectedValue = question.show_condition.expected_value;
+            const expectedValue = question.show_condition.expected_value || question.show_condition.value;
                 
-            if (parentQuestionId) {
-                const parentQuestion = props.questions.find(q => q.id === parentQuestionId);
-                const parentText = parentQuestion ? truncateText(parentQuestion.question_text, 25) : `Pregunta #${parentQuestionId}`;
-                const parentOrder = parentQuestion ? parentQuestion.order : 'N/A';
-                
+            if (parentQuestionId !== null && parentQuestionId !== undefined) {
+                const parentQuestion = props.questions.find(q => q.id === parentQuestionId); // Usar ID
+                const parentText = parentQuestion ? truncateText(parentQuestion.question_text, 25) : `Pregunta ID #${parentQuestionId}`;
+                const parentOrder = parentQuestion ? parentQuestion.order : parentQuestionId;
                 let operatorText = '';
                 switch (operator) {
                     case 'equals':

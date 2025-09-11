@@ -56,7 +56,7 @@ class EvaluationCategoryController extends Controller
     public function store(StoreEvaluationCategoryRequest $request)
     {
         $validated = $request->validated();
-
+    
         // Generar slug si no se proporciona
         if (empty($validated['slug'])) {
             $validated['slug'] = Str::slug($validated['name']);
@@ -69,7 +69,12 @@ class EvaluationCategoryController extends Controller
                 $counter++;
             }
         }
-
+    
+        // Establecer is_active = true por defecto si no se proporciona
+        if (!isset($validated['is_active'])) {
+            $validated['is_active'] = true;
+        }
+    
         try {
             EvaluationCategory::create($validated);
             

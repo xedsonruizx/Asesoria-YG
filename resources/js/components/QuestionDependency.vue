@@ -7,6 +7,8 @@ import InputError from '@/components/InputError.vue';
 interface Question {
   id: number;
   question_text: string;
+  question_type?: 'text' | 'textarea' | 'select' | 'number' | 'checkbox' | 'radio';
+  order?: number;
 }
 
 interface ShowCondition {
@@ -50,6 +52,34 @@ const condition = computed({
   set: (value: ShowCondition) => emit('update:showCondition', value)
 });
 
+// Computed para obtener el tipo de la pregunta padre seleccionada
+const parentQuestionType = computed(() => {
+  if (!condition.value.parent_question_id) return null;
+  const parentQuestion = availableQuestions.value.find(q => q.id === condition.value.parent_question_id);
+  return parentQuestion?.question_type || null;
+});
+
+// Computed para las opciones de operador disponibles
+const availableOperators = computed(() => {
+  const baseOperators = [
+    { value: 'equals', label: 'Es igual a' },
+    { value: 'not_equals', label: 'No es igual a' },
+    { value: 'contains', label: 'Contiene' },
+    { value: 'is_empty', label: 'Está vacío' },
+    { value: 'is_not_empty', label: 'Está rellenado' }
+  ];
+  
+  // Solo agregar opciones numéricas si la pregunta padre es de tipo número
+  if (parentQuestionType.value === 'number') {
+    baseOperators.splice(3, 0, // Insertar antes de 'is_empty'
+      { value: 'greater_than', label: 'Mayor que' },
+      { value: 'less_than', label: 'Menor que' }
+    );
+  }
+  
+  return baseOperators;
+});
+
 // Función para cargar preguntas por categoría
 const loadQuestionsByCategory = async (categoryId: number) => {
   if (!categoryId) {
@@ -86,8 +116,6 @@ const loadQuestionsByCategory = async (categoryId: number) => {
 
 // Función para actualizar parent_question_id
 const updateParentQuestionId = (value: number | null) => {
-
-  
   const newCondition = {
     ...props.showCondition,
     parent_question_id: value
@@ -114,7 +142,6 @@ const updateValue = (value: string) => {
 
 // Watcher para cargar preguntas cuando cambie la categoría
 watch(() => props.categoryId, (newCategoryId, oldCategoryId) => {
-  
   if (newCategoryId && hasDependency.value) {
     loadQuestionsByCategory(newCategoryId);
   } else {
@@ -159,12 +186,6 @@ onMounted(() => {
     <div v-if="hasDependency" class="space-y-4 ml-6">
       <div>
         <Label for="parent_question">Pregunta padre</Label>
-        <!-- DEBUG INFO -->
-        <!-- <div class="text-xs text-gray-500 mb-2">
-          Debug: parent_question_id = {{ showCondition.parent_question_id }} | 
-          categoryId = {{ categoryId }} | 
-          availableQuestions.length = {{ availableQuestions.length }}
-        </div> -->
         <select 
           id="parent_question"
           :value="condition.parent_question_id"
@@ -187,13 +208,13 @@ onMounted(() => {
           @input="updateOperator(($event.target as HTMLSelectElement).value)"
           class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         >
-          <option value="equals">Es igual a</option>
-          <option value="not_equals">No es igual a</option>
-          <option value="contains">Contiene</option>
-          <option value="greater_than">Mayor que</option>
-          <option value="less_than">Menor que</option>
-          <option value="is_empty">Está vacío</option>
-          <option value="is_not_empty">Está rellenado</option>
+          <option 
+            v-for="operator in availableOperators" 
+            :key="operator.value" 
+            :value="operator.value"
+          >
+            {{ operator.label }}
+          </option>
         </select>
         <InputError :message="errors['show_condition.operator']" />
       </div>

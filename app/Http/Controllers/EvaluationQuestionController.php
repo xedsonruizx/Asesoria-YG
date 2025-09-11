@@ -185,7 +185,7 @@ class EvaluationQuestionController extends Controller
         $availableQuestions = EvaluationQuestion::where('id', '!=', $id)
             ->where('category_id', $question->category_id)
             ->orderBy('order')
-            ->get(['id', 'question_text', 'order']); // Agregar 'order' aquí también
+            ->get(['id', 'question_text', 'order']); // Mantener order para mostrar, pero usar id para dependencias
     
         return Inertia::render('administration/Questions/Edit', [
             'question' => $question,
@@ -352,13 +352,13 @@ class EvaluationQuestionController extends Controller
             
             $query = EvaluationQuestion::where('category_id', $categoryId)
                 ->where('is_active', true)
-                ->orderBy('order'); // Esto asegura que siempre se ordene por el campo 'order' actualizado
+                ->orderBy('order'); // Ordenar por order para mostrar
             
             if ($excludeId) {
                 $query->where('id', '!=', $excludeId);
             }
             
-            // Asegurar que siempre se incluya el campo 'order' actualizado
+            // Devolver id, question_text y order - el frontend usará id para dependencias
             $questions = $query->get(['id', 'question_text', 'order']);
             
             return response()->json($questions);

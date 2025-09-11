@@ -40,6 +40,7 @@ class EvaluationController extends Controller
         }
     
         // Si la evaluación ya está completada, mostrar resultados
+        // Para evaluaciones completadas
         if ($evaluation->status === 'completed') {
             $report = $evaluation->generateReport();
             
@@ -61,11 +62,17 @@ class EvaluationController extends Controller
             // Obtener solo preguntas que tienen respuestas
             $questionsWithAnswers = EvaluationQuestion::whereIn('id', $answeredQuestionIds)
                 ->where('is_active', true)
-                ->orderBy('order')
+                ->orderBy('order')  // Mantener order para ordenamiento visual
                 ->get();
-    
-            $categories = EvaluationCategory::where('is_active', true)->orderBy('order')->get();
-    
+            
+            $categories = EvaluationCategory::where('is_active', true)
+                ->withCount(['questions' => function ($query) {
+                    $query->where('is_active', true);
+                }])
+                ->having('questions_count', '>', 0)
+                ->orderBy('id')
+                ->get();
+            
             $finalData = [
                 'evaluation' => $evaluation,
                 'report' => $report,
@@ -80,7 +87,13 @@ class EvaluationController extends Controller
         }
     
         // Para evaluaciones en progreso
-        $categories = EvaluationCategory::where('is_active', true)->orderBy('order')->get();
+        $categories = EvaluationCategory::where('is_active', true)
+            ->withCount(['questions' => function ($query) {
+                $query->where('is_active', true);
+            }])
+            ->having('questions_count', '>', 0)
+            ->orderBy('id')
+            ->get();
         $questions = EvaluationQuestion::where('is_active', true)->orderBy('order')->get();
     
         $finalData = [
@@ -125,8 +138,8 @@ class EvaluationController extends Controller
     {
         $request->validate([
             'evaluation_id' => 'required|exists:evaluations,id',
-            'question_id' => 'required|exists:evaluation_questions,id',
-            'answer_value' => 'required',
+            'question_id' => 'required|integer',
+            'answer_value' => 'nullable', // Cambiar de 'required' a 'nullable'
         ]);
     
         $evaluation = Evaluation::findOrFail($request->evaluation_id);
@@ -136,11 +149,41 @@ class EvaluationController extends Controller
             abort(403);
         }
     
-        // Obtener la pregunta para validar el tipo de respuesta
-        $question = EvaluationQuestion::findOrFail($request->question_id);
+        // Verificar si la pregunta existe (incluyendo eliminadas)
+        $question = EvaluationQuestion::withTrashed()->find($request->question_id);
         
+        if (!$question) {
+            return response()->json([
+                'success' => false,
+                'message' => 'La pregunta no existe'
+            ], 404);
+        }
+        
+        // Si la pregunta está eliminada, no permitir guardar nuevas respuestas
+        if ($question->trashed()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se puede guardar respuesta para una pregunta eliminada',
+                'question_deleted' => true
+            ], 422);
+        }
+    
         // Procesar la respuesta según el tipo de pregunta
         $answerValue = $request->answer_value;
+        
+        // Si el valor está vacío, eliminar la respuesta existente
+        if ($answerValue === null || $answerValue === '' || (is_array($answerValue) && empty($answerValue))) {
+            EvaluationAnswer::where([
+                'evaluation_id' => $request->evaluation_id,
+                'question_id' => $request->question_id,
+            ])->delete();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Respuesta eliminada',
+                'deleted' => true
+            ]);
+        }
         
         // Para preguntas de checkbox, asegurar que sea un array
         if ($question->question_type === 'checkbox' && !is_array($answerValue)) {
@@ -160,14 +203,9 @@ class EvaluationController extends Controller
             ['answer_value' => $answerValue]
         );
     
-        // Calcular puntos y actualizar scores usando el método correcto
-        $answer->calculatePoints();
-        $evaluation->calculateScoresByCategory();
-    
         return response()->json([
             'success' => true,
-            'evaluation' => $evaluation->fresh(),
-            'points_earned' => $answer->points_earned,
+            'answer' => $answer
         ]);
     }
 

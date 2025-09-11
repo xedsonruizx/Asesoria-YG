@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use App\Models\EvaluationQuestion;
 
 class UpdateEvaluationQuestionRequest extends FormRequest
@@ -38,7 +39,15 @@ class UpdateEvaluationQuestionRequest extends FormRequest
             'min_value' => 'nullable|integer',
             'max_value' => 'nullable|integer|gte:min_value',
             'points' => $hasIndividualPoints ? 'nullable|integer|min:0' : 'required|integer|min:0',
-            'order' => 'required|integer|min:1|unique:evaluation_questions,order,' . $questionId . ',id,category_id,' . $this->category_id,
+            'order' => [
+                'required',
+                'integer',
+                'min:1',
+                Rule::unique('evaluation_questions', 'order')
+                    ->ignore($questionId)
+                    ->where('category_id', $this->category_id)
+                    ->whereNull('deleted_at')
+            ],
             'show_condition' => 'nullable|array',
             'validation_rules' => 'nullable|array',
             'is_required' => 'boolean',

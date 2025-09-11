@@ -26,7 +26,13 @@ class EvaluationCategory extends Model
     {
         return $this->hasMany(EvaluationQuestion::class, 'category_id')
             ->where('is_active', true)
-            ->orderBy('name');
+            ->orderBy('order');
+    }
+
+    // Agregar nueva relación para contar todas las preguntas
+    public function allQuestions(): HasMany
+    {
+        return $this->hasMany(EvaluationQuestion::class, 'category_id');
     }
 
     public function scopeActive($query)
@@ -36,7 +42,7 @@ class EvaluationCategory extends Model
 
     public function scopeOrdered($query)
     {
-        return $query->orderBy('name');
+        return $query->orderBy('id');
     }
 
     public function getRouteKeyName(): string

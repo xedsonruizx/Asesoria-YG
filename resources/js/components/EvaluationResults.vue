@@ -80,10 +80,10 @@
         'grid-cols-1 md:grid-cols-3': visibleCategories.length === 2,
         'grid-cols-2 md:grid-cols-4': visibleCategories.length >= 3
       }">
-        <div class="bg-gray-800 rounded-lg p-6 text-center">
+        <!-- <div class="bg-gray-800 rounded-lg p-6 text-center">
           <div class="text-white text-3xl font-bold mb-2">{{ totalQuestions }}</div>
           <div class="text-gray-400 text-sm">Preguntas respondidas</div>
-        </div>
+        </div> -->
         <div v-for="category in visibleCategories" :key="`stat-${category.id}`" class="bg-gray-800 rounded-lg p-6 text-center">
           <div class="text-white text-3xl font-bold mb-2">{{ getCategoryPercentage(category.name) }}%</div>
           <div class="text-gray-400 text-sm">Puntaje {{ category.name }}</div>

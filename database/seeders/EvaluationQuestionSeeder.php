@@ -13,6 +13,8 @@ class EvaluationQuestionSeeder extends Seeder
         // Obtener IDs de categorías
         $rrhhCategory = EvaluationCategory::where('slug', 'rrhh')->first();
         $legalCategory = EvaluationCategory::where('slug', 'legal')->first();
+        $financieroCategory = EvaluationCategory::where('slug', 'financiero')->first();
+        $operacionalCategory = EvaluationCategory::where('slug', 'operacional')->first();
 
         $questionsData = [
             // Preguntas RRHH
@@ -30,7 +32,11 @@ class EvaluationQuestionSeeder extends Seeder
             [
                 'category_id' => $rrhhCategory->id,
                 'question_text' => '¿Tiene un manual de funciones definido?',
-                'question_type' => 'yes_no',
+                'question_type' => 'radio',
+                'options' => json_encode([
+                    ['text' => 'Sí', 'points' => 15],
+                    ['text' => 'No', 'points' => 0]
+                ]),
                 'points' => 15,
                 'is_required' => true,
                 'order' => 2,
@@ -63,7 +69,7 @@ class EvaluationQuestionSeeder extends Seeder
                 'show_condition' => json_encode([
                     'parent_order' => 2,
                     'operator' => 'equals',
-                    'value' => false
+                    'value' => 'No'
                 ]),
                 'is_required' => false,
                 'order' => 4,
@@ -71,7 +77,11 @@ class EvaluationQuestionSeeder extends Seeder
             [
                 'category_id' => $rrhhCategory->id,
                 'question_text' => '¿Realiza evaluaciones de desempeño?',
-                'question_type' => 'yes_no',
+                'question_type' => 'radio',
+                'options' => json_encode([
+                    ['text' => 'Sí', 'points' => 18],
+                    ['text' => 'No', 'points' => 0]
+                ]),
                 'points' => 18,
                 'is_required' => true,
                 'order' => 5,
@@ -90,7 +100,7 @@ class EvaluationQuestionSeeder extends Seeder
                 'show_condition' => json_encode([
                     'parent_order' => 5,
                     'operator' => 'equals',
-                    'value' => true
+                    'value' => 'Sí'
                 ]),
                 'is_required' => false,
                 'order' => 6,
@@ -130,7 +140,11 @@ class EvaluationQuestionSeeder extends Seeder
             [
                 'category_id' => $legalCategory->id,
                 'question_text' => '¿Conoce sus derechos laborales básicos?',
-                'question_type' => 'yes_no',
+                'question_type' => 'radio',
+                'options' => json_encode([
+                    ['text' => 'Sí', 'points' => 15],
+                    ['text' => 'No', 'points' => 0]
+                ]),
                 'points' => 15,
                 'is_required' => true,
                 'order' => 1,
@@ -138,12 +152,16 @@ class EvaluationQuestionSeeder extends Seeder
             [
                 'category_id' => $legalCategory->id,
                 'question_text' => '¿Ha tenido que hacer valer sus derechos ante su empleador?',
-                'question_type' => 'yes_no',
+                'question_type' => 'radio',
+                'options' => json_encode([
+                    ['text' => 'Sí', 'points' => 10],
+                    ['text' => 'No', 'points' => 0]
+                ]),
                 'points' => 10,
                 'show_condition' => json_encode([
                     'parent_order' => 1,
                     'operator' => 'equals',
-                    'value' => true
+                    'value' => 'Sí'
                 ]),
                 'is_required' => false,
                 'order' => 2,
@@ -151,12 +169,16 @@ class EvaluationQuestionSeeder extends Seeder
             [
                 'category_id' => $legalCategory->id,
                 'question_text' => '¿Considera que necesita asesoría sobre sus derechos laborales?',
-                'question_type' => 'yes_no',
+                'question_type' => 'radio',
+                'options' => json_encode([
+                    ['text' => 'Sí', 'points' => 8],
+                    ['text' => 'No', 'points' => 0]
+                ]),
                 'points' => 8,
                 'show_condition' => json_encode([
                     'parent_order' => 1,
                     'operator' => 'equals',
-                    'value' => false
+                    'value' => 'No'
                 ]),
                 'is_required' => false,
                 'order' => 3,
@@ -164,7 +186,11 @@ class EvaluationQuestionSeeder extends Seeder
             [
                 'category_id' => $legalCategory->id,
                 'question_text' => '¿Obtuvo una respuesta satisfactoria de su empleador?',
-                'question_type' => 'yes_no',
+                'question_type' => 'radio',
+                'options' => json_encode([
+                    ['text' => 'Sí', 'points' => 18],
+                    ['text' => 'No', 'points' => 0]
+                ]),
                 'points' => 18,
                 'is_required' => true,
                 'order' => 4,
@@ -187,7 +213,11 @@ class EvaluationQuestionSeeder extends Seeder
             [
                 'category_id' => $legalCategory->id,
                 'question_text' => '¿Está afiliado al seguro social?',
-                'question_type' => 'yes_no',
+                'question_type' => 'radio',
+                'options' => json_encode([
+                    ['text' => 'Sí', 'points' => 20],
+                    ['text' => 'No', 'points' => 0]
+                ]),
                 'points' => 20,
                 'is_required' => true,
                 'order' => 6,
@@ -195,7 +225,11 @@ class EvaluationQuestionSeeder extends Seeder
             [
                 'category_id' => $legalCategory->id,
                 'question_text' => '¿Su empleador cumple con las normativas laborales básicas?',
-                'question_type' => 'yes_no',
+                'question_type' => 'radio',
+                'options' => json_encode([
+                    ['text' => 'Sí', 'points' => 15],
+                    ['text' => 'No', 'points' => 0]
+                ]),
                 'points' => 15,
                 'is_required' => true,
                 'order' => 7,

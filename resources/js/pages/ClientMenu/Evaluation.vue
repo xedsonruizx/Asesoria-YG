@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue';
-import { Head } from '@inertiajs/vue3';
+import { ref, computed, onMounted, watch } from 'vue';
+import { Head, router } from '@inertiajs/vue3';
 import Button from '@/components/ui/button/Button.vue';
 import Card from '@/components/ui/card/Card.vue';
 import TopBar from '@/components/MyComponents/TopBar.vue';
 import QuestionInput from '@/components/QuestionInput.vue';
 import EvaluationResults from '@/components/EvaluationResults.vue';
-import { router } from '@inertiajs/vue3';
 import axios from 'axios';
 
+// Interfaces
 interface Question {
     id: number;
     question_text: string;
@@ -22,7 +22,7 @@ interface Question {
     show_condition?: {
         parent_question_id: number;
         operator: 'equals' | 'not_equals' | 'contains' | 'not_contains';
-        expected_value: any;
+        value: any;
     };
     order: number;
     is_active: boolean;
@@ -34,6 +34,8 @@ interface Category {
     name: string;
     description?: string;
     slug: string;
+    questions_count?: number;
+    color?: string;
 }
 
 interface CategoryScore {
@@ -55,6 +57,7 @@ interface Evaluation {
     is_completed: boolean;
     completed_at?: string;
     category_scores: Record<string, CategoryScore>;
+    status: 'draft' | 'in_progress' | 'completed';
 }
 
 interface Props {
@@ -64,453 +67,316 @@ interface Props {
     categories: Category[];
     showResults?: boolean;
     report?: any;
-    categoryScores?: Record<string, CategoryScore>; // Agregar esta prop
+    categoryScores?: Record<string, CategoryScore>;
 }
 
 const props = defineProps<Props>();
 
-// Función para inicializar respuestas con valores por defecto
-const initializeAnswersWithDefaults = () => {
-    const initialAnswers = { ...props.answers };
-    
-    props.questions.forEach(question => {
-        if (question.question_type === 'select' && question.is_active) {
-            if (initialAnswers[question.id] === undefined || initialAnswers[question.id] === null) {
-                initialAnswers[question.id] = '';
-            }
-        }
-    });
-    
-    return initialAnswers;
-};
-
-// Estado reactivo - Priorizar datos del backend
+// Estado reactivo
 const evaluation = ref<Evaluation>(props.evaluation);
 const answers = ref<Record<number, any>>(props.answers || {});
-const showResults = ref<boolean>(props.showResults || props.evaluation?.is_completed || false);
+const showResults = ref<boolean>(props.showResults || props.evaluation?.status === 'completed' || false);
 const isSubmitting = ref<boolean>(false);
 const notification = ref<{ type: string; message: string }>({ type: '', message: '' });
+const currentCategoryIndex = ref<number>(0);
 
-const STORAGE_KEY = `evaluation_${props.evaluation.id}_answers`;
-
-// Función para guardar respuestas en localStorage
-const saveAnswersToStorage = () => {
-    try {
-        const dataToSave = {
-            answers: answers.value,
-            showResults: showResults.value,
-            timestamp: Date.now()
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
-    } catch (error) {
-        console.error('Error al guardar respuestas:', error);
-    }
-};
-
-// Función para cargar respuestas desde localStorage
-const loadAnswersFromStorage = () => {
-    // PRIORIDAD 1: Si la evaluación está completada, SIEMPRE usar datos del backend
-    if (props.evaluation?.status === 'completed' || props.showResults) {
-        answers.value = props.answers || {};
-        showResults.value = true;
-        
-        // Limpiar localStorage si existe (ya no es necesario)
-        if (localStorage.getItem(STORAGE_KEY)) {
-            localStorage.removeItem(STORAGE_KEY);
-        }
-        
-        return;
+// Función para verificar si una pregunta debe mostrarse
+const shouldShowQuestion = (question: Question): boolean => {
+    if (!question.show_condition) {
+        return true;
     }
     
-    // PRIORIDAD 2: Solo usar localStorage para evaluaciones en progreso
-    try {
-        const savedData = localStorage.getItem(STORAGE_KEY);
-        
-        if (savedData) {
-            const parsedData = JSON.parse(savedData);
-            
-            // Verificar si los datos no son muy antiguos (24 horas)
-            const twentyFourHours = 24 * 60 * 60 * 1000;
-            if (parsedData.timestamp && Date.now() - parsedData.timestamp > twentyFourHours) {
-                localStorage.removeItem(STORAGE_KEY);
-                answers.value = initializeAnswersWithDefaults();
-                return;
+    if (!question.show_condition.parent_question_id) {
+        return true;
+    }
+    
+    const parentQuestion = props.questions.find(q => 
+        q.id === question.show_condition.parent_question_id
+    );
+    
+    if (!parentQuestion) return true;
+    
+    const parentAnswer = answers.value[parentQuestion.id];
+    const expectedValue = question.show_condition.value;
+    
+    // Para condiciones is_empty e is_not_empty, no verificar expectedValue
+    if (!['empty', 'is_empty', 'filled', 'is_not_empty'].includes(question.show_condition.operator)) {
+        if (expectedValue === null || expectedValue === undefined) return true;
+    }
+    
+    switch (question.show_condition.operator) {
+        case 'equals':
+            if (parentAnswer === undefined || parentAnswer === null || parentAnswer === '') {
+                return false;
             }
-            
-            // Combinar respuestas guardadas con las del backend
-            if (parsedData.answers) {
-                const backendAnswers = props.answers || {};
-                const localStorageAnswers = parsedData.answers;
-                
-                // Backend tiene prioridad sobre localStorage
-                answers.value = { ...localStorageAnswers, ...backendAnswers };
-            } else {
-                answers.value = initializeAnswersWithDefaults();
+            if (typeof expectedValue === 'string' && typeof parentAnswer === 'string') {
+                return parentAnswer === expectedValue;
             }
-        } else {
-            answers.value = initializeAnswersWithDefaults();
-        }
-    } catch (error) {
-        console.error('Error al cargar desde localStorage:', error);
-        answers.value = initializeAnswersWithDefaults();
-    }
-};
-
-// Función para limpiar localStorage cuando se completa la evaluación
-const clearStoredAnswers = () => {
-    try {
-        localStorage.removeItem(STORAGE_KEY);
-    } catch (error) {
-        console.error('Error al limpiar localStorage:', error);
-    }
-};
-
-// Función para guardar automáticamente cada cierto tiempo
-let autoSaveTimeout: NodeJS.Timeout | null = null;
-const scheduleAutoSave = () => {
-    if (autoSaveTimeout) {
-        clearTimeout(autoSaveTimeout);
-    }
-    autoSaveTimeout = setTimeout(() => {
-        saveAnswersToStorage();
-    }, 2000); // Guardar después de 2 segundos de inactividad
-};
-
-// Watcher para guardar automáticamente cuando cambien las respuestas o showResults
-watch([answers, showResults], () => {
-    // Solo guardar en localStorage si la evaluación NO está completada
-    if (!props.evaluation?.is_completed && !showResults.value && Object.keys(answers.value).length > 0) {
-        scheduleAutoSave();
-    }
-}, { deep: true });
-
-// Agregar la computed property faltante para agrupar preguntas por categoría
-const visibleQuestionsByCategory = computed(() => {
-    const categoriesWithQuestions = props.categories.map(category => {
-        // Filtrar preguntas de esta categoría
-        const categoryQuestions = props.questions.filter(q => 
-            q.category_id === category.id && q.is_active
-        );
-        
-        // Filtrar preguntas visibles basándose en show_condition
-        const visibleQuestions = categoryQuestions.filter(question => {
-            if (!question.show_condition) return true;
-            
-            const conditionAnswer = answers.value[question.show_condition.questionId];
-            return conditionAnswer === question.show_condition.answer;
-        });
-        
-        return {
-            ...category,
-            questions: visibleQuestions.sort((a, b) => a.order - b.order)
-        };
-    });
-    
-    // Solo devolver categorías que tienen preguntas visibles
-    return categoriesWithQuestions.filter(category => category.questions.length > 0);
-});
-
-// Función para obtener los puntos de una respuesta
-const getAnswerPoints = (question: Question, answer: any): number => {
-    if (!answer || answer === '') return 0;
-    
-    // Para tipos con puntos individuales por opción
-    if (['select', 'radio', 'checkbox'].includes(question.question_type)) {
-        if (!question.options) return 0;
-        
-        let options = question.options;
-        
-        // Si las opciones vienen como string JSON, parsearlas
-        if (typeof options === 'string') {
-            try {
-                options = JSON.parse(options);
-            } catch (e) {
-                console.error('Error parsing options JSON in getAnswerPoints:', e);
-                // Si falla el parsing, usar puntos base de la pregunta
-                return question.points;
-            }
-        }
-        
-        // Si las opciones tienen el nuevo formato con puntos
-        if (Array.isArray(options) && 
-            options.length > 0 && 
-            typeof options[0] === 'object' && 
-            'points' in options[0]) {
-            
-            const optionsWithPoints = options as Array<{text: string, points: number}>;
-            
-            if (question.question_type === 'checkbox' && Array.isArray(answer)) {
-                // Para checkboxes, sumar puntos de todas las opciones seleccionadas
-                return answer.reduce((sum, selectedOption) => {
-                    const option = optionsWithPoints.find(opt => opt.text === selectedOption);
-                    return sum + (option?.points || 0);
-                }, 0);
-            } else {
-                // Para select y radio, obtener puntos de la opción seleccionada
-                const option = optionsWithPoints.find(opt => opt.text === answer);
-                return option?.points || 0;
-            }
-        }
-        
-        // Si es formato antiguo (array de strings), usar puntos base
-        if (Array.isArray(options)) {
-            return question.points;
-        }
-    }
-    
-    // Para otros tipos o formato antiguo, usar los puntos base de la pregunta
-    return question.points;
-};
-
-// Computed para puntajes por categoría
-const categoryScores = computed(() => {
-    // Si tenemos categoryScores desde el backend (resultados completados), convertirlos al formato esperado
-    if (props.categoryScores && Object.keys(props.categoryScores).length > 0) {
-        const convertedScores: Record<string, CategoryScore> = {};
-        
-        // Crear mapeo dinámico desde las categorías de la base de datos
-        const categoryMap: Record<string, string> = {};
-        props.categories.forEach(category => {
-            categoryMap[category.slug] = category.name;
-        });
-        
-        Object.entries(props.categoryScores).forEach(([slug, data]) => {
-            const categoryName = categoryMap[slug] || slug;
-            convertedScores[categoryName] = {
-                category: categoryName,
-                score: data.score || 0,
-                maxScore: data.maxScore || data.max_score || 1,
-                progress: data.progress || 0,
-                percentage: data.percentage || 0,
-                obtainedPoints: data.obtainedPoints || 0,
-                totalPossiblePoints: data.totalPossiblePoints || 0,
-                answeredQuestions: data.answeredQuestions || 0
-            };
-        });
-        
-        return convertedScores;
-    }
-    
-    // Si no, calcular basándose en las preguntas visibles (evaluación en progreso)
-    const scores: Record<string, CategoryScore> = {};
-    
-    visibleQuestionsByCategory.value.forEach(category => {
-        const categoryQuestions = category.questions;
-        
-        // Calcular puntaje máximo considerando el nuevo formato
-        const maxScore = categoryQuestions.reduce((sum, q) => {
-            if (['select', 'radio', 'checkbox'].includes(q.question_type) && q.options) {
-                // Si tiene opciones con puntos individuales
-                if (Array.isArray(q.options) && 
-                    q.options.length > 0 && 
-                    typeof q.options[0] === 'object' && 
-                    'points' in q.options[0]) {
-                    
-                    const optionsWithPoints = q.options as Array<{text: string, points: number}>;
-                    
-                    if (q.question_type === 'checkbox') {
-                        // Para checkboxes, el máximo es la suma de todos los puntos
-                        return sum + optionsWithPoints.reduce((optSum, opt) => optSum + opt.points, 0);
-                    } else {
-                        // Para select y radio, el máximo es el mayor puntaje disponible
-                        return sum + Math.max(...optionsWithPoints.map(opt => opt.points));
-                    }
+            if (typeof expectedValue === 'boolean') {
+                if (expectedValue === true) {
+                    return parentAnswer === 'Sí' || parentAnswer === true;
+                }
+                if (expectedValue === false) {
+                    return parentAnswer === 'No' || parentAnswer === false;
                 }
             }
-            return sum + q.points;
-        }, 0);
-        
-        // Calcular puntaje actual
-        const currentScore = categoryQuestions.reduce((sum, q) => {
-            const answer = answers.value[q.id];
-            return sum + getAnswerPoints(q, answer);
-        }, 0);
-        
-        const answeredQuestions = categoryQuestions.filter(q => {
-            const answer = answers.value[q.id];
-            return answer !== undefined && answer !== '' && answer !== null;
-        }).length;
-        
-        const progress = categoryQuestions.length > 0 ? Math.round((answeredQuestions / categoryQuestions.length) * 100) : 0;
-        const percentage = maxScore > 0 ? Math.round((currentScore / maxScore) * 100) : 0;
-        
-        scores[category.name] = {
-            category: category.name,
-            score: currentScore,
-            maxScore,
-            progress,
-            percentage,
-            obtainedPoints: currentScore,
-            totalPossiblePoints: maxScore,
-            answeredQuestions
-        };
-    });
-    
-    return scores;
-});
-
-const totalScore = computed(() => {
-    return Object.values(categoryScores.value).reduce((sum, cat) => sum + cat.score, 0);
-});
-
-const totalPossibleScore = computed(() => {
-    return Object.values(categoryScores.value).reduce((sum, cat) => sum + cat.maxScore, 0);
-});
-
-const totalAnsweredQuestions = computed(() => {
-    return Object.values(categoryScores.value).reduce((sum, cat) => sum + (cat.answeredQuestions || 0), 0);
-});
-
-const overallPercentage = computed(() => {
-    return totalPossibleScore.value > 0 ? Math.round((totalScore.value / totalPossibleScore.value) * 100) : 0;
-});
-
-const isValidForSubmission = computed(() => {
-    return Object.values(categoryScores.value).every(cat => cat.progress >= 20);
-});
-
-// Funciones
-const showNotification = (type: string, message: string) => {
-    notification.value = { type, message };
-    setTimeout(() => {
-        notification.value = { type: '', message: '' };
-    }, 3000);
+            return parentAnswer == expectedValue;
+        case 'not_equals':
+            if (parentAnswer === undefined || parentAnswer === null || parentAnswer === '') {
+                return false;
+            }
+            return parentAnswer != expectedValue;
+        case 'contains':
+            if (parentAnswer === undefined || parentAnswer === null || parentAnswer === '') {
+                return false;
+            }
+            return Array.isArray(parentAnswer) && parentAnswer.includes(expectedValue);
+        case 'not_contains':
+            if (parentAnswer === undefined || parentAnswer === null || parentAnswer === '') {
+                return false;
+            }
+            return !Array.isArray(parentAnswer) || !parentAnswer.includes(expectedValue);
+        case 'greater_than':
+            if (parentAnswer === undefined || parentAnswer === null || parentAnswer === '') {
+                return false;
+            }
+            const numParentAnswer = parseFloat(parentAnswer);
+            const numExpectedValue = parseFloat(expectedValue);
+            // Validar que ambos valores sean números válidos
+            if (isNaN(numParentAnswer) || isNaN(numExpectedValue)) {
+                console.warn('Comparación greater_than: uno de los valores no es numérico', { parentAnswer, expectedValue });
+                return false;
+            }
+            return numParentAnswer > numExpectedValue;
+        case 'less_than':
+            if (parentAnswer === undefined || parentAnswer === null || parentAnswer === '') {
+                return false;
+            }
+            const numParentAnswerLess = parseFloat(parentAnswer);
+            const numExpectedValueLess = parseFloat(expectedValue);
+            // Validar que ambos valores sean números válidos
+            if (isNaN(numParentAnswerLess) || isNaN(numExpectedValueLess)) {
+                console.warn('Comparación less_than: uno de los valores no es numérico', { parentAnswer, expectedValue });
+                return false;
+            }
+            return numParentAnswerLess < numExpectedValueLess;
+        case 'empty':
+        case 'is_empty':
+            const isEmpty = parentAnswer === undefined || parentAnswer === null || parentAnswer === '' || 
+                   (Array.isArray(parentAnswer) && parentAnswer.length === 0);
+            return isEmpty;
+        case 'filled':
+        case 'is_not_empty':
+            const isFilled = parentAnswer !== undefined && parentAnswer !== null && parentAnswer !== '' && 
+                   (!Array.isArray(parentAnswer) || parentAnswer.length > 0);
+            return isFilled;
+        default:
+            return true;
+    }
 };
 
-// Modificar la función submitEvaluation
-const submitEvaluation = async () => {
-    if (!isValidForSubmission.value) {
-        showNotification('error', 'Debe completar al menos el 80% de cada sección para enviar la evaluación.');
-        return;
+// Categorías con preguntas organizadas
+const categoriesWithQuestions = computed(() => {
+    return props.categories
+        .filter(category => {
+            if (category.questions_count !== undefined) {
+                return category.questions_count > 0;
+            }
+            const categoryQuestions = props.questions.filter(q => 
+                q.category_id === category.id && q.is_active
+            );
+            return categoryQuestions.length > 0;
+        })
+        .map(category => {
+            const categoryQuestions = props.questions
+                .filter(q => q.category_id === category.id && q.is_active);
+            
+            
+            const filteredQuestions = categoryQuestions.filter(shouldShowQuestion);
+            
+            
+            const sortedQuestions = filteredQuestions.sort((a, b) => a.order - b.order);
+            
+            return {
+                ...category,
+                questions: sortedQuestions,
+                answeredCount: sortedQuestions.filter(q => 
+                    answers.value[q.id] !== undefined && 
+                    answers.value[q.id] !== null && 
+                    answers.value[q.id] !== ''
+                ).length
+            };
+        })
+        .filter(category => {
+            return category.questions.length > 0;
+        });
+});
+
+// Progreso general
+const overallProgress = computed(() => {
+    const totalQuestions = categoriesWithQuestions.value.reduce((sum, cat) => sum + cat.questions.length, 0);
+    const answeredQuestions = categoriesWithQuestions.value.reduce((sum, cat) => sum + cat.answeredCount, 0);
+    return totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
+});
+
+// Progreso de categoría actual
+const currentCategoryProgress = computed(() => {
+    const currentCategory = categoriesWithQuestions.value[currentCategoryIndex.value];
+    if (!currentCategory) return 0;
+    return currentCategory.questions.length > 0 
+        ? Math.round((currentCategory.answeredCount / currentCategory.questions.length) * 100) 
+        : 0;
+});
+
+// Navegación entre categorías
+const goToCategory = (index: number) => {
+    currentCategoryIndex.value = index;
+};
+
+const nextCategory = () => {
+    if (currentCategoryIndex.value < categoriesWithQuestions.value.length - 1) {
+        currentCategoryIndex.value++;
+    }
+};
+
+const previousCategory = () => {
+    if (currentCategoryIndex.value > 0) {
+        currentCategoryIndex.value--;
+    }
+};
+
+// Guardar respuesta
+const saveAnswer = async (questionId: number, value: any) => {
+    if (value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
+        delete answers.value[questionId];
+    } else {
+        answers.value[questionId] = value;
     }
     
+    try {
+        const response = await axios.post('/evaluation/answer', {
+            evaluation_id: evaluation.value.id,
+            question_id: questionId,
+            answer_value: value
+        });
+        
+        if (response.data.deleted) {
+            delete answers.value[questionId];
+        }
+    } catch (error) {
+        console.error('Error saving answer:', error);
+        
+        if (error.response?.status === 422 && error.response?.data?.question_deleted) {
+            delete answers.value[questionId];
+            console.warn(`Pregunta ${questionId} eliminada, respuesta removida del cache`);
+        }
+    }
+};
+
+// Completar evaluación
+const completeEvaluation = async () => {
     isSubmitting.value = true;
     
     try {
-        // Enviar solo las respuestas, el controlador obtendrá la evaluación del usuario autenticado
+        const visibleQuestionIds = new Set(
+            categoriesWithQuestions.value
+                .flatMap(category => category.questions)
+                .map(question => question.id)
+        );
+        
+        const visibleAnswers = Object.fromEntries(
+            Object.entries(answers.value).filter(([questionId]) => 
+                visibleQuestionIds.has(parseInt(questionId))
+            )
+        );
+        
         const response = await axios.post('/evaluation/submit', {
-            answers: answers.value
+            evaluation_id: evaluation.value.id,
+            answers: visibleAnswers
         });
         
         if (response.data.success) {
             // Actualizar el estado local con los datos del servidor
             evaluation.value = response.data.evaluation;
-            
-            // Limpiar localStorage al completar exitosamente
-            clearStoredAnswers();
+            evaluation.value.status = 'completed';
+            evaluation.value.is_completed = true;
+            evaluation.value.completed_at = new Date().toISOString();
             
             // Mostrar resultados
             showResults.value = true;
-            showNotification('success', '¡Evaluación completada exitosamente!');
+            
+            // Mostrar notificación de éxito
+            notification.value = {
+                type: 'success',
+                message: '¡Evaluación completada exitosamente! Refrescando página...'
+            };
+            
+            // Refrescar la página después de 2 segundos
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
         }
     } catch (error) {
-        console.error('Error al enviar evaluación:', error);
-        showNotification('error', 'Error al enviar la evaluación. Las respuestas se han guardado automáticamente.');
+        console.error('Error completing evaluation:', error);
+        notification.value = {
+            type: 'error',
+            message: 'Error al completar la evaluación'
+        };
     } finally {
         isSubmitting.value = false;
     }
 };
 
-// Modificar la función handleRestart
+// Verificar si todas las preguntas están respondidas
+const allQuestionsAnswered = computed(() => {
+    return categoriesWithQuestions.value.every(category => 
+        category.questions.every(question => 
+            !question.is_required || 
+            (answers.value[question.id] !== undefined && 
+             answers.value[question.id] !== null && 
+             answers.value[question.id] !== '')
+        )
+    );
+});
+
+// Limpiar notificaciones
+const clearNotification = () => {
+    notification.value = { type: '', message: '' };
+};
+
+// Función para reiniciar la evaluación
 const handleRestart = async () => {
     try {
         await axios.post('/evaluation/restart', {
             evaluation_id: evaluation.value.id
         });
         
-        // Limpiar localStorage al reiniciar
-        clearStoredAnswers();
-        
         // Resetear estado local
         answers.value = {};
         showResults.value = false;
-        evaluation.value.is_completed = false;
-        evaluation.value.completed_at = undefined;
         
-        showNotification('success', 'Evaluación reiniciada correctamente. Refrescando página...');
+        // Usar la notificación existente en lugar de showNotification
+        notification.value = {
+            type: 'success',
+            message: 'Evaluación reiniciada correctamente.'
+        };
         
-        // Refrescar la página después de 2 segundos
-        setTimeout(() => {
-            window.location.reload();
-        }, 2000);
+        // Remover el window.location.reload() para evitar el refresco
+        // setTimeout(() => {
+        //     window.location.reload();
+        // }, 2000);
     } catch (error) {
-        console.log(error);
-        showNotification('error', 'Error al reiniciar la evaluación.');
+        console.error('Error al reiniciar evaluación:', error);
+        // Usar la notificación existente
+        notification.value = {
+            type: 'error',
+            message: 'Error al reiniciar la evaluación.'
+        };
     }
 };
-
-// Función para manejar el evento beforeunload (cuando el usuario cierra la página)
-const handleBeforeUnload = () => {
-    if (!showResults.value && Object.keys(answers.value).length > 0) {
-        saveAnswersToStorage();
-    }
-};
-
-// Inicialización
-onMounted(() => {
-    // Cargar respuestas (prioridad backend)
-    loadAnswersFromStorage();
-    
-    // Logs iniciales al cargar la página
-    console.log('🔄 PÁGINA REFRESCADA - Datos iniciales:');
-    console.log('📊 Evaluación:', evaluation.value);
-    console.log('📝 Respuestas cargadas:', answers.value);
-    console.log('🎯 Puntajes por categoría:', categoryScores.value);
-    console.log('📈 Puntaje total:', totalScore.value, '/', totalPossibleScore.value);
-    console.log('📊 Porcentaje general:', overallPercentage.value + '%');
-    console.log('✅ Preguntas respondidas:', correctlyAnsweredQuestions.value);
-    console.log('🏁 Mostrar resultados:', showResults.value);
-    console.log('📋 Props recibidas:', {
-        evaluation: props.evaluation,
-        categoryScores: props.categoryScores,
-        showResults: props.showResults,
-        totalQuestions: props.questions.length
-    });
-    
-    // Agregar listener para guardar antes de cerrar la página
-    window.addEventListener('beforeunload', handleBeforeUnload);
-});
-
-// Limpiar listeners al desmontar
-onBeforeUnmount(() => {
-    if (autoSaveTimeout) {
-        clearTimeout(autoSaveTimeout);
-    }
-    window.removeEventListener('beforeunload', handleBeforeUnload);
-});
-
-// Calcular preguntas respondidas correctamente
-const correctlyAnsweredQuestions = computed(() => {
-    const answeredCount = Object.entries(answers.value).filter(([questionId, answer]) => {
-        // Encontrar la pregunta
-        const question = visibleQuestionsByCategory.value
-            .flatMap(cat => cat.questions)
-            .find(q => q.id.toString() === questionId);
-        
-        if (!question || !answer || answer === '') return false;
-        
-        // Para preguntas con opciones, verificar si la respuesta es válida
-        if (['select', 'radio', 'checkbox'].includes(question.question_type)) {
-            if (question.question_type === 'checkbox') {
-                return Array.isArray(answer) && answer.length > 0;
-            }
-            return answer !== '';
-        }
-        
-        // Para otros tipos de preguntas
-        return answer !== undefined && answer !== null && answer !== '';
-    }).length;
-    
-    // Log de preguntas respondidas
-    console.log('📊 Preguntas respondidas:', answeredCount);
-    console.log('📝 Respuestas actuales:', answers.value);
-    
-    return answeredCount;
-});
 
 // Función para manejar solicitud de consultoría
 const handleRequestConsultation = () => {
-    // Redirigir a la página de contacto o abrir modal de consultoría
     router.visit('/contact', {
         data: {
             service: 'consultation',
@@ -519,169 +385,200 @@ const handleRequestConsultation = () => {
     });
 };
 
-// Watcher para logs de puntajes y porcentajes
-watch([categoryScores, totalScore, overallPercentage], ([newCategoryScores, newTotalScore, newPercentage]) => {
-    console.log('🎯 Puntajes por categoría:', newCategoryScores);
-    console.log('📈 Puntaje total:', newTotalScore, '/', totalPossibleScore.value);
-    console.log('📊 Porcentaje general:', newPercentage + '%');
-    console.log('✅ Preguntas respondidas totales:', totalAnsweredQuestions.value);
-}, { deep: true });
-
-// Función para obtener el color del progreso
-const getProgressColor = (progress: number): string => {
-    if (progress >= 80) return 'text-green-600';
-    if (progress >= 60) return 'text-yellow-600';
-    if (progress >= 40) return 'text-orange-600';
-    return 'text-red-600';
-};
-
-// Función para obtener el mensaje del puntaje
-const getScoreMessage = (score: number, categoryName: string): string => {
-    if (score >= 70) return `Excelente situación en ${categoryName}`;
-    if (score >= 50) return `Situación mejorable en ${categoryName}`;
-    return `Requiere atención en ${categoryName}`;
-};
-
-// Función para verificar si una pregunta debe mostrarse
-const shouldShowQuestion = (question: Question): boolean => {
-    if (!question.show_condition) return true;
-    
-    const conditionAnswer = answers.value[question.show_condition.parent_question_id];
-    const expectedValue = question.show_condition.expected_value;
-    
-    switch (question.show_condition.operator) {
-        case 'equals':
-            return conditionAnswer === expectedValue;
-        case 'not_equals':
-            return conditionAnswer !== expectedValue;
-        case 'contains':
-            return Array.isArray(conditionAnswer) && conditionAnswer.includes(expectedValue);
-        case 'not_contains':
-            return !Array.isArray(conditionAnswer) || !conditionAnswer.includes(expectedValue);
-        default:
-            return true;
+// Limpiar notificación después de 5 segundos
+watch(notification, (newVal) => {
+    if (newVal.message) {
+        setTimeout(clearNotification, 5000);
     }
+});
+
+// Función para limpiar respuestas de preguntas eliminadas
+const cleanupDeletedQuestions = () => {
+    const validQuestionIds = new Set(
+        categoriesWithQuestions.value
+            .flatMap(category => category.questions)
+            .map(question => question.id)
+    );
+    
+    Object.keys(answers.value).forEach(questionId => {
+        if (!validQuestionIds.has(parseInt(questionId))) {
+            delete answers.value[parseInt(questionId)];
+            console.warn(`Respuesta para pregunta eliminada ${questionId} removida`);
+        }
+    });
 };
+
+onMounted(() => {
+    cleanupDeletedQuestions();
+});
 </script>
 
 <template>
-    <Head title="Evaluación Laboral" />
-    
-    <TopBar />
-    
-    <!-- Notificación nativa -->
-    <div 
-        v-if="notification.type" 
-        class="fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all duration-300"
-        :class="{
-            'bg-green-500 text-white': notification.type === 'success',
-            'bg-red-500 text-white': notification.type === 'error'
-        }"
-    >
-        {{ notification.message }}
-    </div>
-    
-    <!-- Mostrar resultados si la evaluación está completada -->
-    <EvaluationResults
-        v-if="showResults"
-        :categories="props.categories"
-        :category-scores="categoryScores"
-        :total-questions="correctlyAnsweredQuestions"
-        @restart="handleRestart"
-        @request-consultation="handleRequestConsultation"
-    />
-    
-    <!-- Formulario de evaluación si no está completada -->
-    <div v-else class="min-h-screen bg-gray-50 py-8 dark:bg-gray-900">
-        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="min-h-screen bg-[#FDFDFC] dark:bg-[#0a0a0a]">
+        <Head title="Evaluación" />
+        
+        <TopBar />
+        <!-- Notificación -->
+        <div v-if="notification.message" 
+             :class="[
+                 'fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all duration-300',
+                 notification.type === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+             ]">
+            {{ notification.message }}
+            <button @click="clearNotification" class="ml-2 text-white hover:text-gray-200">
+                ×
+            </button>
+        </div>
+
+        <!-- Mostrar resultados si la evaluación está completada -->
+        <div v-if="showResults" class="container mx-auto px-4 py-8">
+            <EvaluationResults 
+                :categories="categoriesWithQuestions" 
+                :category-scores="categoryScores || {}" 
+                :answers="answers"
+                @restart="handleRestart"
+                @requestConsultation="handleRequestConsultation"
+            />
+        </div>
+
+        <!-- Formulario de evaluación -->
+        <div v-else class="container mx-auto px-4 py-8">
             <!-- Progreso general -->
-            <Card class="mb-8 p-6">
-                <div class="text-center">
-                    <h1 class="text-3xl font-bold text-gray-900 mb-4 dark:text-white">Evaluación Laboral</h1>
-                    <div class="w-full bg-gray-200 rounded-full h-4 mb-4 dark:bg-gray-700">
-                        <div 
-                            class="bg-blue-600 h-4 rounded-full transition-all duration-300" 
-                            :style="{ width: progress + '%' }"
-                        ></div>
-                    </div>
-                    <p class="text-lg font-medium" :class="getProgressColor(progress)">
-                        Progreso: {{ progress }}%
-                    </p>
+            <div class="mb-8">
+                <div class="flex items-center justify-between mb-2">
+                    <h1 class="text-3xl font-bold text-gray-900 mb-4 dark:text-white">Evaluación</h1>
+                    <span class="text-sm text-gray-600">{{ overallProgress }}% completado</span>
                 </div>
-            </Card>
+                <div class="bg-gray-200 rounded-full h-2">
+                    <div 
+                        class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        :style="{ width: overallProgress + '%' }"
+                    ></div>
+                </div>
+            </div>
 
-            <!-- Secciones de preguntas dinámicas -->
-            <div class="space-y-8">
-                <Card v-for="category in visibleQuestionsByCategory" :key="category.id" class="p-6">
+            <!-- Navegación de categorías -->
+            <div v-if="categoriesWithQuestions.length > 0" class="bg-[#FDFDFC] dark:bg-[#0a0a0a] rounded-lg shadow-sm border p-4 mb-8">
+                <div class="flex flex-wrap gap-2 justify-center">
+                    <button
+                        v-for="(category, index) in categoriesWithQuestions"
+                        :key="category.id"
+                        @click="goToCategory(index)"
+                        :class="[
+                            'px-4 py-2 rounded-lg font-medium transition-all duration-200',
+                            currentCategoryIndex === index
+                                ? 'bg-blue-600 text-white shadow-md'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        ]"
+                    >
+                        {{ category.name }}
+                        <span class="ml-2 text-xs opacity-75">
+                            ({{ category.answeredCount }}/{{ category.questions.length }})
+                        </span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mensaje cuando no hay categorías ni preguntas -->
+            <div v-if="categoriesWithQuestions.length === 0" class="text-center py-12">
+                <div class="bg-gray-50 rounded-lg p-8 border border-gray-200">
+                    <div class="text-gray-400 mb-4">
+                        <svg class="mx-auto h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">Sin preguntas disponibles</h3>
+                    <p class="text-gray-500">No hay categorías ni preguntas configuradas para esta evaluación en este momento.</p>
+                </div>
+            </div>
+
+            <!-- Contenido existente cuando hay categorías y preguntas -->
+            <div v-else-if="categoriesWithQuestions[currentCategoryIndex]" class="space-y-6">
+                <Card class=" p-6 ">
                     <div class="mb-6">
-                        <h2 class="text-2xl font-bold text-gray-900 mb-2 dark:text-white">{{ category.name }}</h2>
-                        <div class="w-full bg-gray-200 rounded-full h-2.5 mb-4">
-                            <div 
-                                class="h-2.5 rounded-full transition-all duration-300" 
-                                :class="{
-                                    'bg-green-500': categoryScores[category.name]?.progress >= 80,
-                                    'bg-yellow-500': categoryScores[category.name]?.progress >= 60 && categoryScores[category.name]?.progress < 80,
-                                    'bg-orange-500': categoryScores[category.name]?.progress >= 40 && categoryScores[category.name]?.progress < 60,
-                                    'bg-red-500': categoryScores[category.name]?.progress < 40
-                                }"
-                                :style="{ width: (categoryScores[category.name]?.progress || 0) + '%' }"
-                            ></div>
-                        </div>
-                        <p class="text-sm text-gray-600 dark:text-gray-400">
-                            Progreso: {{ categoryScores[category.name]?.progress || 0 }}% 
-                            ({{ categoryScores[category.name]?.score || 0 }} puntos)
-                            <span v-if="category.questions.length > 0" class="ml-2">
-                                - {{ category.questions.filter(q => answers[q.id] !== undefined && answers[q.id] !== '').length }} de {{ category.questions.length }} preguntas respondidas
+                        <h2 class="text-xl font-bold text-gray-900 mb-4 dark:text-white mb-2">
+                            {{ categoriesWithQuestions[currentCategoryIndex].name }}
+                        </h2>
+                        <p v-if="categoriesWithQuestions[currentCategoryIndex].description" 
+                           class="text-gray-600 mb-4">
+                            {{ categoriesWithQuestions[currentCategoryIndex].description }}
+                        </p>
+                        
+                        <!-- Progreso de la categoría -->
+                        <div class="flex items-center gap-4">
+                            <div class="flex-1">
+                                <div class="bg-gray-200 rounded-full h-2">
+                                    <div 
+                                        class="bg-green-600 h-2 rounded-full transition-all duration-300"
+                                        :style="{ width: currentCategoryProgress + '%' }"
+                                    ></div>
+                                </div>
+                            </div>
+                            <span class="text-sm text-gray-600 font-medium">
+                                {{ currentCategoryProgress }}%
                             </span>
-                        </p>
+                        </div>
                     </div>
 
-                    <div class="space-y-6">
-                        <QuestionInput
-                            v-for="question in category.questions.filter(q => shouldShowQuestion(q))" 
+                    <!-- Preguntas de la categoría -->
+                    <div class="space-y-6 " >
+                        <div 
+                            v-for="question in categoriesWithQuestions[currentCategoryIndex].questions" 
                             :key="question.id"
-                            :question="question"
-                            v-model="answers[question.id]"
-                        />
-                    </div>
-
-                    <!-- Resultado de la sección -->
-                    <div v-if="(categoryScores[category.name]?.progress || 0) > 0" class="mt-6 p-4 rounded-lg" :class="{
-                        'bg-green-50 border border-green-200': (categoryScores[category.name]?.progress || 0) >= 80,
-                        'bg-yellow-50 border border-yellow-200': (categoryScores[category.name]?.progress || 0) >= 60 && (categoryScores[category.name]?.progress || 0) < 80,
-                        'bg-orange-50 border border-orange-200': (categoryScores[category.name]?.progress || 0) >= 40 && (categoryScores[category.name]?.progress || 0) < 60,
-                        'bg-red-50 border border-red-200': (categoryScores[category.name]?.progress || 0) < 40
-                    }">
-                        <h3 class="font-semibold" :class="{
-                            'text-green-800': (categoryScores[category.name]?.progress || 0) >= 80,
-                            'text-yellow-800': (categoryScores[category.name]?.progress || 0) >= 60 && (categoryScores[category.name]?.progress || 0) < 80,
-                            'text-orange-800': (categoryScores[category.name]?.progress || 0) >= 40 && (categoryScores[category.name]?.progress || 0) < 60,
-                            'text-red-800': (categoryScores[category.name]?.progress || 0) < 40
-                        }">
-                            {{ getScoreMessage(categoryScores[category.name]?.score || 0, category.name) }}
-                        </h3>
-                        <p class="text-sm mt-1" :class="{
-                            'text-green-600': (categoryScores[category.name]?.progress || 0) >= 80,
-                            'text-yellow-600': (categoryScores[category.name]?.progress || 0) >= 60 && (categoryScores[category.name]?.progress || 0) < 80,
-                            'text-orange-600': (categoryScores[category.name]?.progress || 0) >= 40 && (categoryScores[category.name]?.progress || 0) < 60,
-                            'text-red-600': (categoryScores[category.name]?.progress || 0) < 40
-                        }">
-                            Puntaje obtenido: {{ categoryScores[category.name]?.score || 0 }} puntos
-                        </p>
+                            class="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors"
+                        >
+                            <QuestionInput
+                                :question="question"
+                                :model-value="answers[question.id]"
+                                @update:model-value="(value) => saveAnswer(question.id, value)"
+                            />
+                        </div>
                     </div>
                 </Card>
 
-                <!-- Botones de acción -->
-                <div class="flex justify-center space-x-4">
-                    <Button 
-                        @click="submitEvaluation"
-                        :disabled="!isValidForSubmission || isSubmitting"
-                        class="px-8 py-3"
+                <!-- Navegación entre categorías -->
+                <div class="flex justify-between items-center">
+                    <Button
+                        v-if="currentCategoryIndex > 0"
+                        @click="previousCategory"
+                        variant="outline"
+                        class="flex items-center gap-2"
                     >
-                        {{ isSubmitting ? 'Enviando...' : 'Completar Evaluación' }}
+                        ← Anterior
                     </Button>
+                    <div v-else></div>
+
+                    <div class="text-sm text-gray-600">
+                        Categoría {{ currentCategoryIndex + 1 }} de {{ categoriesWithQuestions.length }}
+                    </div>
+
+                    <Button
+                        v-if="currentCategoryIndex < categoriesWithQuestions.length - 1"
+                        @click="nextCategory"
+                        class="flex items-center gap-2"
+                    >
+                        Siguiente →
+                    </Button>
+                    <Button
+                        v-else-if="allQuestionsAnswered"
+                        @click="completeEvaluation"
+                        :disabled="isSubmitting"
+                        class="bg-green-600 hover:bg-green-700 flex items-center gap-2"
+                    >
+                        <span v-if="isSubmitting">Completando...</span>
+                        <span v-else>Completar Evaluación ✓</span>
+                    </Button>
+                    <div v-else class="text-sm text-amber-600">
+                        Complete todas las preguntas requeridas
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </template>
+
+<style scoped>
+.container {
+    max-width: 1200px;
+}
+</style>

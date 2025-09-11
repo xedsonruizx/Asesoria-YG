@@ -425,62 +425,12 @@ watch(() => form.question_type, () => {
 
 
                                 <!-- Dependencias de pregunta -->
-                                <div class="space-y-4 border-t border-border pt-4">
-                                    <h4 class="font-medium text-foreground">Dependencias</h4>
-                                    
-                                    <div class="flex items-center space-x-2">
-                                        <input 
-                                            id="has_dependency"
-                                            v-model="hasDependency"
-                                            type="checkbox"
-                                            class="rounded border-input text-primary focus:ring-ring"
-                                        />
-                                        <Label for="has_dependency">Esta pregunta depende de otra</Label>
-                                    </div>
-                                    
-                                    <div v-if="hasDependency" class="space-y-4 ml-6">
-                                        <div>
-                                            <Label for="parent_question">Pregunta padre</Label>
-                                            <select 
-                                                id="parent_question"
-                                                v-model="form.show_condition.parent_question_id"
-                                                class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                                            >
-                                                <option :value="null">Seleccionar pregunta</option>
-                                                <option v-for="question in availableQuestions" :key="question.id" :value="question.id">
-                                                    Orden {{ question.order }} - {{ question.question_text }}
-                                                </option>
-                                            </select>
-                                            <InputError :message="form.errors['show_condition.parent_question_id']" />
-                                        </div>
-                                        
-                                        <div>
-                                            <Label for="condition_operator">Condición</Label>
-                                            <select 
-                                                id="condition_operator"
-                                                v-model="form.show_condition.operator"
-                                                class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                                            >
-                                                <option value="equals">Es igual a</option>
-                                                <option value="not_equals">No es igual a</option>
-                                                <option value="contains">Contiene</option>
-                                                <option value="greater_than">Mayor que</option>
-                                                <option value="less_than">Menor que</option>
-                                            </select>
-                                            <InputError :message="form.errors['show_condition.operator']" />
-                                        </div>
-                                        
-                                        <div>
-                                            <Label for="condition_value">Valor esperado</Label>
-                                            <Input 
-                                                id="condition_value"
-                                                v-model="form.show_condition.value"
-                                                placeholder="Valor que debe tener la pregunta padre"
-                                            />
-                                            <InputError :message="form.errors['show_condition.value']" />
-                                        </div>
-                                    </div>
-                                </div>
+                                <QuestionDependency
+                                  v-model="hasDependency"
+                                  v-model:show-condition="form.show_condition"
+                                  :category-id="form.category_id"
+                                  :errors="form.errors"
+                                />
 
                                 <!-- Checkboxes -->
                                 <div class="space-y-4">

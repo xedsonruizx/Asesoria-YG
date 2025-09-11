@@ -107,10 +107,28 @@ const submitForm = () => {
   form.post('/admin/questions', {
     onSuccess: () => {
       router.visit('/admin/questions');
-    }
+    },
   });
 };
 
+// Agregar función para actualizar puntos totales
+const updateTotalPoints = (totalPoints: number) => {
+  // Solo actualizar puntos automáticamente para tipos con opciones
+  if (['select', 'radio', 'checkbox'].includes(form.question_type)) {
+    form.points = totalPoints;
+  }
+};
+
+// Watcher para resetear puntos cuando cambie el tipo de pregunta
+watch(() => form.question_type, (newType) => {
+  if (['select', 'radio', 'checkbox'].includes(newType)) {
+    // Para tipos con opciones, los puntos se calcularán automáticamente
+    form.points = 0;
+  } else {
+    // Para otros tipos, establecer puntos por defecto
+    form.points = 1;
+  }
+});
 const goBack = () => {
   router.visit('/admin/questions');
 };
@@ -392,22 +410,3 @@ watch(hasDependency, (newValue) => {
     </div>
   </AppLayout>
 </template>
-
-// Agregar función para actualizar puntos totales
-const updateTotalPoints = (totalPoints: number) => {
-  // Solo actualizar puntos automáticamente para tipos con opciones
-  if (['select', 'radio', 'checkbox'].includes(form.question_type)) {
-    form.points = totalPoints;
-  }
-};
-
-// Watcher para resetear puntos cuando cambie el tipo de pregunta
-watch(() => form.question_type, (newType) => {
-  if (['select', 'radio', 'checkbox'].includes(newType)) {
-    // Para tipos con opciones, los puntos se calcularán automáticamente
-    form.points = 0;
-  } else {
-    // Para otros tipos, establecer puntos por defecto
-    form.points = 1;
-  }
-});

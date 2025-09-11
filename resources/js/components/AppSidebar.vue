@@ -22,7 +22,7 @@ const mainNavItems: NavItem[] = [
     {
         title: 'Tags publicaciones',
         href: '/tags',
-        icon: Folder,
+        icon: Tags,
     },
     {
         title: 'Publicaciones',
