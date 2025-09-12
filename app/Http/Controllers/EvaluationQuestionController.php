@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 use Exception;
 use App\Http\Requests\StoreEvaluationQuestionRequest;
 use App\Http\Requests\UpdateEvaluationQuestionRequest;
+use App\Models\Multa;
 
 class EvaluationQuestionController extends Controller
 {
@@ -18,18 +19,11 @@ class EvaluationQuestionController extends Controller
      */
     public function index(Request $request)
     {
-        $query = EvaluationQuestion::with(['category', 'answers']);
+        $query = EvaluationQuestion::with(['category', 'multas'])
+            ->withCount('answers')
+            ->orderBy('order');
 
-        // Mostrar solo preguntas no eliminadas por defecto
-        if (!$request->has('show_deleted')) {
-            // Las preguntas eliminadas se excluyen automáticamente con SoftDeletes
-        } elseif ($request->show_deleted === 'only') {
-            $query->onlyTrashed();
-        } elseif ($request->show_deleted === 'with') {
-            $query->withTrashed();
-        }
-
-        // Aplicar filtros
+        // Aplicar filtros existentes...
         if ($request->filled('search')) {
             $query->where('question_text', 'like', '%' . $request->search . '%');
         }
@@ -43,57 +37,22 @@ class EvaluationQuestionController extends Controller
         }
 
         if ($request->filled('is_active')) {
-            $query->where('is_active', $request->boolean('is_active'));
+            $query->where('is_active', $request->is_active === 'true');
         }
 
-        // Obtener todas las preguntas sin paginación
-        $questions = $query->orderBy('order')->get();
+        if ($request->boolean('show_deleted')) {
+            $query->withTrashed();
+        }
 
-        // Agregar información de dependencias a cada pregunta
-        $questions = $questions->map(function ($question) {
-            // Validar que la pregunta no sea null
-            if (!$question) {
-                return null;
-            }
-            
-            $question->has_answers = $question->answers()->exists();
-            $question->answers_count = $question->answers()->count();
-            
-            // Asegurar que is_active tenga un valor por defecto
-            if (!isset($question->is_active)) {
-                $question->is_active = true;
-            }
-            
-            // Asegurar que show_condition sea un array con la nueva estructura
-            if ($question->show_condition && is_string($question->show_condition)) {
-                $question->show_condition = json_decode($question->show_condition, true);
-            }
-            
-            // Asegurar que options sea un array
-            if ($question->options && is_string($question->options)) {
-                $question->options = json_decode($question->options, true) ?: [];
-            } elseif (!$question->options) {
-                $question->options = [];
-            }
-            
-            return $question;
-        })->filter(); // Eliminar elementos null
-
-        // Obtener estadísticas
-        $stats = [
-            'total' => EvaluationQuestion::count(),
-            'active' => EvaluationQuestion::where('is_active', true)->count(),
-            'inactive' => EvaluationQuestion::where('is_active', false)->count(),
-            'with_answers' => EvaluationQuestion::whereHas('answers')->count(),
-        ];
-
-        $categories = EvaluationCategory::orderBy('name')->get();
+        $questions = $query->get(); // Cambiar de paginate() a get()
+        $categories = EvaluationCategory::active()->get();
+        $multas = Multa::active()->get();
 
         return Inertia::render('administration/Questions/Index', [
             'questions' => $questions,
-            'stats' => $stats,
             'categories' => $categories,
-            'filters' => $request->only(['search', 'category_id', 'question_type', 'is_active']),
+            'multas' => $multas,
+            'filters' => $request->only(['search', 'category_id', 'question_type', 'is_active', 'show_deleted'])
         ]);
     }
 
@@ -102,11 +61,12 @@ class EvaluationQuestionController extends Controller
      */
     public function create()
     {
-        $categories = EvaluationCategory::active()->ordered()->get();
+        $categories = EvaluationCategory::active()->get();
+        $multas = Multa::active()->get(['id', 'name', 'description']);
         
-        // No pasamos preguntas disponibles aquí, se cargarán dinámicamente por categoría
         return Inertia::render('administration/Questions/Create', [
-            'categories' => $categories
+            'categories' => $categories,
+            'multas' => $multas
         ]);
     }
 
@@ -143,7 +103,22 @@ class EvaluationQuestionController extends Controller
             $questionData['points'] = 1;
         }
     
-        EvaluationQuestion::create($questionData);
+        // Crear la pregunta
+        $question = EvaluationQuestion::create($questionData);
+        
+        // Asociar multas si están presentes
+        if ($request->has('multa_condition') && !empty($request->multa_condition)) {
+            $multaCondition = $request->multa_condition;
+            
+            // Verificar que multa_id no esté vacío y sea un número válido
+            if (!empty($multaCondition['multa_id']) && is_numeric($multaCondition['multa_id'])) {
+                $question->multas()->attach($multaCondition['multa_id'], [
+                    'trigger_condition' => $multaCondition['trigger_condition'] ?? 'always',
+                    'trigger_value' => $multaCondition['trigger_value'] ?? null,
+                    'is_active' => true
+                ]);
+            }
+        }
     
         // Preservar filtros en la redirección
         $filters = $request->only(['search', 'category_id', 'question_type', 'is_active', 'show_deleted']);
@@ -167,42 +142,30 @@ class EvaluationQuestionController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(string $id)
+    public function edit(EvaluationQuestion $question)
     {
-        $question = EvaluationQuestion::with(['category'])->findOrFail($id);
-        $categories = EvaluationCategory::active()->ordered()->get();
+        $question->load(['category', 'multas']);
+        $categories = EvaluationCategory::active()->get();
+        $multas = Multa::active()->get(['id', 'name', 'description']);
         
-        // Asegurar que las opciones sean un array
-        if ($question->options && is_string($question->options)) {
-            $question->options = json_decode($question->options, true) ?: [];
-        } elseif (!$question->options) {
-            $question->options = [];
-        }
-        
-        // Asegurar que show_condition sea un array con la estructura correcta
-        if ($question->show_condition && is_string($question->show_condition)) {
-            $question->show_condition = json_decode($question->show_condition, true);
-        }
-        
-        // Si no hay show_condition o está vacío, establecer estructura por defecto
-        if (!$question->show_condition) {
-            $question->show_condition = [
-                'parent_question_id' => null,
-                'operator' => 'equals',
-                'value' => ''
+        // Transformar los datos de multas para el frontend
+        $multaCondition = null;
+        if ($question->multas->isNotEmpty()) {
+            $firstMulta = $question->multas->first();
+            $multaCondition = [
+                'multa_id' => $firstMulta->id,
+                'trigger_condition' => $firstMulta->pivot->trigger_condition,
+                'trigger_value' => $firstMulta->pivot->trigger_value
             ];
         }
         
-        // Agregar preguntas disponibles para dependencias (excluyendo la pregunta actual y filtrando por categoría)
-        $availableQuestions = EvaluationQuestion::where('id', '!=', $id)
-            ->where('category_id', $question->category_id)
-            ->orderBy('order')
-            ->get(['id', 'question_text', 'order']); // Mantener order para mostrar, pero usar id para dependencias
-    
+        // Agregar multa_condition al objeto question
+        $question->multa_condition = $multaCondition;
+        
         return Inertia::render('administration/Questions/Edit', [
             'question' => $question,
             'categories' => $categories,
-            'availableQuestions' => $availableQuestions
+            'multas' => $multas
         ]);
     }
 
@@ -247,6 +210,26 @@ class EvaluationQuestionController extends Controller
         }
     
         $question->update($questionData);
+        
+        // Sincronizar multas
+        if ($request->has('multa_condition')) {
+            $multaCondition = $request->multa_condition;
+            
+            // Primero, desasociar todas las multas existentes
+            $question->multas()->detach();
+            
+            // Luego, asociar la nueva multa si está presente y es válida
+            if (!empty($multaCondition['multa_id']) && is_numeric($multaCondition['multa_id'])) {
+                $question->multas()->attach($multaCondition['multa_id'], [
+                    'trigger_condition' => $multaCondition['trigger_condition'] ?? 'always',
+                    'trigger_value' => $multaCondition['trigger_value'] ?? null,
+                    'is_active' => true
+                ]);
+            }
+        } else {
+            // Si no hay multa_condition en la request, desasociar todas las multas
+            $question->multas()->detach();
+        }
         
         // Si el orden cambió, actualizar las dependencias que referencian esta pregunta
         if ($orderChanged) {
@@ -316,19 +299,28 @@ class EvaluationQuestionController extends Controller
     {
         $question = EvaluationQuestion::withTrashed()->findOrFail($id);
         
-        // Verificar si la pregunta tiene respuestas asociadas
-        if ($question->answers()->count() > 0) {
-            $filters = request()->only(['search', 'category_id', 'question_type', 'is_active', 'show_deleted']);
-            return redirect()->route('admin.questions.index', $filters)
-                ->with('error', 'No se puede eliminar permanentemente la pregunta porque tiene respuestas asociadas.');
-        }
-    
+        // Eliminar en cascada todas las relaciones asociadas
+        
+        // 1. Eliminar todas las respuestas de evaluación asociadas
+        $question->answers()->forceDelete();
+        
+        // 2. Desasociar todas las multas relacionadas
+        $question->multas()->detach();
+        
+        // 3. Actualizar preguntas dependientes que referencian esta pregunta
+        // Buscar preguntas que tienen esta pregunta como dependencia
+        EvaluationQuestion::where('show_condition->parent_question_id', $id)
+            ->update([
+                'show_condition' => null
+            ]);
+        
+        // 4. Finalmente, eliminar la pregunta permanentemente
         $question->forceDelete();
     
         // Preservar filtros en la redirección
         $filters = request()->only(['search', 'category_id', 'question_type', 'is_active', 'show_deleted']);
         return redirect()->route('admin.questions.index', $filters)
-            ->with('success', 'Pregunta eliminada permanentemente.');
+            ->with('success', 'Pregunta y todas sus relaciones eliminadas permanentemente.');
     }
 
     /**

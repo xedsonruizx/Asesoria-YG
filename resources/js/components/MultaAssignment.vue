@@ -76,6 +76,18 @@ const loadAvailableMultas = async () => {
   } catch (error) {
     console.error('Error loading multas:', error);
     availableMultas.value = [];
+    
+    // Agregar un fallback para debugging
+    console.log('Intentando cargar multas desde el endpoint alternativo...');
+    try {
+      // Intentar con el endpoint directo del controlador
+      const fallbackResponse = await fetch('/multas');
+      if (fallbackResponse.ok) {
+        console.log('Endpoint /multas funciona, pero necesita configuración API');
+      }
+    } catch (fallbackError) {
+      console.error('Fallback también falló:', fallbackError);
+    }
   } finally {
     loading.value = false;
   }
@@ -124,10 +136,27 @@ watch(hasMultaAssignment, (newValue) => {
 
 // Cargar multas al montar el componente si ya hay asignación
 onMounted(() => {
-  if (hasMultaAssignment.value) {
+  // Auto-detectar si existe una multa asociada
+  if (props.multaCondition?.multa_id && !props.modelValue) {
+    // Si hay multa_id pero el checkbox no está marcado, activarlo
+    emit('update:modelValue', true);
+  }
+  
+  if (hasMultaAssignment.value || props.multaCondition?.multa_id) {
     loadAvailableMultas();
   }
 });
+
+// Watcher adicional para detectar cambios en multaCondition
+watch(() => props.multaCondition?.multa_id, (newMultaId) => {
+  if (newMultaId && !hasMultaAssignment.value) {
+    // Si se asigna una multa externamente, activar el checkbox
+    emit('update:modelValue', true);
+    if (availableMultas.value.length === 0) {
+      loadAvailableMultas();
+    }
+  }
+}, { immediate: true });
 </script>
 
 <template>
@@ -145,15 +174,24 @@ onMounted(() => {
     </div>
     
     <div v-if="hasMultaAssignment" class="space-y-4 ml-6">
+      <!-- Mostrar estado de carga y debugging -->
+      <div v-if="loading" class="text-sm text-muted-foreground">
+        Cargando multas...
+      </div>
+      
+      <div v-if="!loading && availableMultas.length === 0" class="text-sm text-red-600">
+        No se pudieron cargar las multas. Verifica la consola para más detalles.
+      </div>
+      
       <div>
         <Label for="multa_select">Multa a aplicar</Label>
         <select 
           id="multa_select"
-          :value="condition.multa_id"
+          :value="condition.multa_id || ''"
           @change="updateMultaId($event.target.value ? parseInt($event.target.value) : null)"
           class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         >
-          <option :value="null">Seleccionar multa</option>
+          <option value="">{{ availableMultas.length === 0 ? 'No hay multas disponibles' : 'Seleccionar multa' }}</option>
           <option v-for="multa in availableMultas" :key="multa.id" :value="multa.id">
             {{ multa.name }}
           </option>

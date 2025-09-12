@@ -47,30 +47,63 @@ interface Question {
   has_answers: boolean;
   answers_count: number;
   status_text: string;
+  multas: {
+    id: number;
+    name: string;
+    description?: string;
+    file_path?: string;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+    deleted_at?: string;
+    pivot: {
+      evaluation_question_id: number;
+      multa_id: number;
+      trigger_condition: string;
+      trigger_value?: string;
+      is_active: number;
+      created_at: string;
+      updated_at: string;
+    };
+  }[];
 }
 
-const props = withDefaults(defineProps<{
+interface Multa {
+  id: number;
+  name: string;
+  description?: string;
+}
+
+interface PaginatedData<T> {
+  data: T[];
+  current_page: number;
+  from: number;
+  last_page: number;
+  per_page: number;
+  to: number;
+  total: number;
+}
+
+interface Props {
   questions: Question[];
   categories: Category[];
+  multas?: Multa[];
   stats?: {
     total: number;
     active: number;
     inactive: number;
-    with_answers: number;
+    deleted: number;
   };
   filters?: {
     search?: string;
-    category_id?: number;
+    category_id?: string;
     question_type?: string;
     is_active?: string;
     show_deleted?: string;
   };
-}>(), {
-  questions: () => [],
-  categories: () => [],
-  stats: () => ({ total: 0, active: 0, inactive: 0, with_answers: 0 }),
-  filters: () => ({})
-});
+}
+
+const props = defineProps<Props>();
 
 // Estados de los modales
 const showCreateModal = ref(false);
@@ -223,6 +256,43 @@ const handleCreated = () => {
     }
   });
 };
+
+
+// Función para obtener información de multa de una pregunta
+const getMultaInfo = (question: Question) => {
+  // Verificar si la pregunta tiene multas asociadas
+  if (!question.multas || question.multas.length === 0) {
+    return {
+      hasMulta: false,
+      text: 'Sin multa',
+      class: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
+    };
+  }
+  
+  // Obtener la primera multa activa
+  const activeMulta = question.multas.find(multa => multa.pivot.is_active);
+  
+  if (!activeMulta) {
+    return {
+      hasMulta: false,
+      text: 'Sin multa activa',
+      class: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
+    };
+  }
+  
+  return {
+    hasMulta: true,
+    text: activeMulta.name,
+    class: 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300',
+    multa: activeMulta,
+    condition: {
+      multa_id: activeMulta.id,
+      trigger_condition: activeMulta.pivot.trigger_condition,
+      trigger_value: activeMulta.pivot.trigger_value
+    }
+  };
+};
+
 
 const handleUpdated = () => {
   const filters = getCurrentFilters();
@@ -420,6 +490,9 @@ const getDependencyInfo = (question: Question) => {
           <div class="bg-blue-50 dark:bg-blue-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md flex-1 sm:flex-none">
             <span class="font-semibold text-blue-700 dark:text-blue-300 text-xs sm:text-sm">Con Respuestas: {{ props.questions.filter(q => q.has_answers).length }}</span>
           </div>
+          <div class="bg-purple-50 dark:bg-purple-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md flex-1 sm:flex-none">
+            <span class="font-semibold text-purple-700 dark:text-purple-300 text-xs sm:text-sm">Con Multas: {{ props.questions.filter(q => q.multa_condition?.multa_id).length }}</span>
+          </div>
         </div>
       </div>
 
@@ -582,19 +655,21 @@ const getDependencyInfo = (question: Question) => {
         </div>
       </div>
 
+
+  
+
       <!-- Lista de preguntas -->
       <div class="bg-card rounded-lg shadow-sm border border-border">
         <div v-if="props.questions && props.questions.length > 0">
-          <!-- Encabezados - Solo visible en desktop -->
-          <div class="hidden lg:block bg-muted/30 p-4 border-b border-border">
-            <div class="grid grid-cols-12 gap-3 font-semibold text-foreground text-sm">
-              <div class="col-span-4">Pregunta</div>
-              <div class="col-span-2">Categoría</div>
-              <div class="col-span-1">Tipo</div>
-              <div class="col-span-1">Puntos</div>
-              <div class="col-span-2">Dependencias</div>
-              <div class="col-span-2 text-right">Acciones</div>
-            </div>
+          <!-- Encabezados de tabla - Solo visible en desktop -->
+          <div class="hidden lg:grid lg:grid-cols-12 gap-4 p-4 bg-muted/50 rounded-t-lg border-b border-border font-medium text-sm text-muted-foreground">
+            <div class="col-span-3">Pregunta</div>
+            <div class="col-span-2">Categoría</div>
+            <div class="col-span-1">Tipo</div>
+            <div class="col-span-1">Puntos</div>
+            <div class="col-span-2">Dependencias</div>
+            <div class="col-span-1">Multas</div>
+            <div class="col-span-2">Acciones</div>
           </div>
           
           <!-- Filas de datos -->
@@ -610,31 +685,34 @@ const getDependencyInfo = (question: Question) => {
               <!-- Layout Desktop (lg y superior) -->
               <div class="hidden lg:grid lg:grid-cols-12 lg:gap-3 lg:items-center">
                 <!-- Pregunta -->
-                <div class="col-span-4">
-                  <div class="flex items-start gap-3">
-                    <div class="flex-shrink-0 w-7 h-7 bg-primary/10 text-primary rounded-full flex items-center justify-center text-xs font-medium">
-                      {{ question.order }}
-                    </div>
-                    <div class="flex-1 min-w-0">
-                      <p class="font-medium text-foreground text-sm leading-tight">
-                        {{ truncateText(question.question_text, 60) }}
-                      </p>
-                      <div class="flex items-center gap-2 mt-1">
+                <div class="col-span-3">
+                  <div class="space-y-1">
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs text-muted-foreground font-mono bg-muted px-2 py-1 rounded">
+                        #{{ question.order }}
+                      </span>
+                      <div class="flex items-center gap-2">
                         <span :class="[
-                          'inline-flex items-center px-2 py-2 rounded-full text-xs font-medium',
+                          'inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium',
                           question.is_active 
                             ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300'
                             : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300'
                         ]">
-                          <component :is="question.is_active ? Power : PowerOff" class="h-3 w-3 mr-1" />
+                          <div :class="[
+                            'w-1.5 h-1.5 rounded-full',
+                            question.is_active ? 'bg-green-500' : 'bg-red-500'
+                          ]"></div>
                           {{ question.is_active ? 'Activa' : 'Inactiva' }}
                         </span>
-                        <span v-if="question.deleted_at" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300">
+                        <span v-if="question.deleted_at" class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300">
                           <AlertTriangle class="h-3 w-3 mr-1" />
                           Eliminada
                         </span>
                       </div>
                     </div>
+                    <p class="font-medium text-sm text-foreground leading-tight">
+                      {{ truncateText(question.question_text, 80) }}
+                    </p>
                   </div>
                 </div>
 
@@ -668,57 +746,70 @@ const getDependencyInfo = (question: Question) => {
                     {{ getDependencyInfo(question).text }}
                   </span>
                 </div>
+                
+                <!-- Multas -->
+                <div class="col-span-1">
+                  <span :class="[
+                    'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
+                    getMultaInfo(question).class
+                  ]">
+                    {{ getMultaInfo(question).text }}
+                  </span>
+                </div>
 
-                <!-- Acciones Desktop -->
-                <div class="col-span-2 flex justify-end items-center gap-1">
-                  <button
-                    v-if="!question.deleted_at"
-                    @click="toggleStatus(question)"
-                    :class="[
-                      'inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors border border-input',
-                      question.is_active
-                        ? 'text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20'
-                        : 'text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20'
-                    ]"
-                    :title="question.is_active ? 'Desactivar' : 'Activar'"
-                  >
-                    <component :is="question.is_active ? PowerOff : Power" class="w-4 h-4" />
-                  </button>
+                <!-- Acciones -->
+                <div class="col-span-2">
+                  <div class="flex items-center gap-1">
+                    <button
+                      v-if="!question.deleted_at"
+                      @click="openEditModal(question)"
+                      class="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors border border-input"
+                      title="Editar"
+                    >
+                      <Edit class="h-4 w-4" />
+                    </button>
+                    
+                    <button
+                      v-if="!question.deleted_at"
+                      @click="toggleStatus(question)"
+                      :class="[
+                        'inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors border border-input',
+                        question.is_active 
+                          ? 'text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20'
+                          : 'text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20'
+                      ]"
+                      :title="question.is_active ? 'Desactivar' : 'Activar'"
+                    >
+                      <component :is="question.is_active ? PowerOff : Power" class="h-4 w-4" />
+                    </button>
 
-                  <button
-                    @click="openEditModal(question)"
-                    class="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors border border-input"
-                    title="Editar"
-                  >
-                    <Edit class="w-4 h-4" />
-                  </button>
-
-                  <button 
-                    v-if="!question.deleted_at && getDependencyInfo(question).canDelete"
-                    @click="openDeleteModal(question)" 
-                    class="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors border border-input"
-                    title="Eliminar"
-                  >
-                    <Trash2 class="w-4 h-4" />
-                  </button>
-
-                  <button
-                    v-if="question.deleted_at"
-                    @click="restoreQuestion(question)"
-                    class="inline-flex items-center p-1.5 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
-                    title="Restaurar"
-                  >
-                    <RotateCcw class="w-4 h-4" />
-                  </button>
-                  
-                  <button
-                    v-if="question.deleted_at"
-                    @click="forceDeleteQuestion(question)"
-                    class="inline-flex items-center p-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                    title="Eliminar Permanente"
-                  >
-                    <Trash2 class="h-3 w-3" />
-                  </button>
+                    <button
+                      v-if="!question.deleted_at && getDependencyInfo(question).canDelete"
+                      @click="openDeleteModal(question)"
+                      class="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors border border-input"
+                      title="Eliminar"
+                    >
+                      <Trash2 class="h-4 w-4" />
+                    </button>
+                    
+                    <button
+                      v-if="question.deleted_at"
+                      @click="restoreQuestion(question)"
+                      class="inline-flex items-center justify-center w-8 h-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-md transition-colors"
+                      title="Restaurar"
+                    >
+                      <RotateCcw class="h-4 w-4" />
+                    </button>
+                    
+                    <button
+                      v-if="question.deleted_at"
+                      @click="forceDeleteQuestion(question)"
+                      class="inline-flex items-center justify-center w-8 h-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                      title="Eliminar Permanente"
+                    >
+                      <Trash2 class="h-3 w-3" />
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -780,6 +871,13 @@ const getDependencyInfo = (question: Question) => {
                     <div class="text-xs text-muted-foreground mb-1">Dependencias</div>
                     <div class="text-xs font-medium" :class="getDependencyInfo(question).class.includes('green') ? 'text-green-600' : getDependencyInfo(question).class.includes('red') ? 'text-red-600' : 'text-yellow-600'">
                       {{ getDependencyInfo(question).text }}
+                    </div>
+                  </div>
+                  
+                  <div class="bg-muted/30 rounded-lg p-2 col-span-2 sm:col-span-4">
+                    <div class="text-xs text-muted-foreground mb-1">Multas </div>
+                    <div class="text-xs font-medium" :class="getMultaInfo(question).hasMulta ? 'text-orange-600' : 'text-gray-600'">
+                      {{ getMultaInfo(question).text }}
                     </div>
                   </div>
                 </div>
@@ -867,6 +965,7 @@ const getDependencyInfo = (question: Question) => {
       @close="closeModals" 
       @created="handleCreated"
       :categories="categories"
+      :multas="multas"
     />
     
     <EditModal 
@@ -875,6 +974,7 @@ const getDependencyInfo = (question: Question) => {
       @close="closeModals" 
       @updated="handleUpdated"
       :categories="categories"
+      :multas="multas"
     />
     
     <DeleteModal 

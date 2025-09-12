@@ -411,10 +411,9 @@ watch(hasDependency, (newValue) => {
                 
                                 <!-- Asignación de Multas -->
                 <div class="space-y-4">
-                  
                   <MultaAssignment 
                     v-if="props.multas && props.multas.length > 0"
-                    :multas="props.multas"
+                    v-model="hasMultaAssignment"
                     :multa-condition="form.multa_condition"
                     @update:multa-condition="form.multa_condition = $event"
                     :errors="form.errors"
@@ -423,7 +422,7 @@ watch(hasDependency, (newValue) => {
               </div>
               
               <!-- Botones - Sticky en móvil -->
-              <div class="sticky bottom-0 bg-background border-t pt-4 mt-6 flex flex-col sm:flex-row justify-end gap-3">
+              <div class=" bg-background border-t pt-4 mt-6 flex flex-col sm:flex-row justify-end gap-3">
                 <Button type="button" variant="outline" @click="close" class="w-full sm:w-auto">
                   Cancelar
                 </Button>

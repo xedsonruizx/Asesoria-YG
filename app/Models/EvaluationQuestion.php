@@ -89,4 +89,14 @@ class EvaluationQuestion extends Model
     {
         return $query->onlyTrashed();
     }
+
+    /**
+     * Relación con multas
+     */
+    public function multas()
+    {
+        return $this->belongsToMany(Multa::class, 'evaluation_question_multa', 'evaluation_question_id', 'multa_id')
+                    ->withPivot('trigger_condition', 'trigger_value', 'is_active')
+                    ->withTimestamps();
+    }
 }

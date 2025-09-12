@@ -61,6 +61,25 @@ interface Question {
         id: number;
         name: string;
     };
+    multas?: {
+        id: number;
+        name: string;
+        description?: string;
+        file_path?: string;
+        is_active: boolean;
+        created_at: string;
+        updated_at: string;
+        deleted_at?: string;
+        pivot: {
+            evaluation_question_id: number;
+            multa_id: number;
+            trigger_condition: string;
+            trigger_value?: string;
+            is_active: number;
+            created_at: string;
+            updated_at: string;
+        };
+    }[];
 }
 
 interface Category {
@@ -132,6 +151,32 @@ const convertOptionsToCorrectFormat = (options: any): QuestionOption[] => {
     return [];
 };
 
+// Función para extraer multa_condition de la estructura de multas
+const extractMultaCondition = (multas?: Question['multas']) => {
+  if (!multas || multas.length === 0) {
+    return {
+      multa_id: null,
+      trigger_condition: 'always',
+      trigger_value: null
+    };
+  }
+  
+  const activeMulta = multas.find(multa => multa.pivot.is_active);
+  if (!activeMulta) {
+    return {
+      multa_id: null,
+      trigger_condition: 'always',
+      trigger_value: null
+    };
+  }
+  
+  return {
+    multa_id: activeMulta.id,
+    trigger_condition: activeMulta.pivot.trigger_condition,
+    trigger_value: activeMulta.pivot.trigger_value
+  };
+};
+
 const form = useForm<QuestionForm>({
     category_id: props.question.category_id,
     question_text: props.question.question_text,
@@ -147,15 +192,19 @@ const form = useForm<QuestionForm>({
         operator: 'equals',
         value: ''
     },
-    multa_condition: props.question.multa_condition || {
-        multa_id: null,
-        trigger_condition: 'always',
-        trigger_value: null
-    },
+    multa_condition: extractMultaCondition(props.question.multas),
     validation_rules: props.question.validation_rules,
     is_required: props.question.is_required,
     is_active: props.question.is_active
 });
+
+// Inicializar hasMultaAssignment basado en los datos existentes
+if (props.question.multas && props.question.multas.length > 0) {
+    const activeMulta = props.question.multas.find(multa => multa.pivot.is_active);
+    if (activeMulta) {
+        hasMultaAssignment.value = true;
+    }
+}
 
 // Establecer hasDependency basándose en el form inicializado
 if (form.show_condition?.parent_question_id) {
@@ -326,6 +375,11 @@ watch(() => form.question_type, (newType, oldType) => {
         <div class="flex flex-col lg:flex-row h-[calc(90vh-64px)] sm:h-[calc(95vh-80px)]">
           <!-- Main Form Area -->
           <div class="flex-1 p-4 sm:p-6 overflow-y-auto">
+
+          <!-- <Pre>{{question}}</Pre> -->
+
+
+
             <form @submit.prevent="submitForm" class="space-y-4 sm:space-y-6">
               <!-- Grid responsive -->
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
@@ -455,7 +509,7 @@ watch(() => form.question_type, (newType, oldType) => {
               </div>
               
               <!-- Botones - Sticky en móvil -->
-              <div class="sticky bottom-0 bg-background border-t pt-4 mt-6 flex flex-col sm:flex-row justify-end gap-3">
+              <div class=" bg-background border-t pt-4 mt-6 flex flex-col sm:flex-row justify-end gap-3">
                 <Button type="button" variant="outline" @click="close" class="w-full sm:w-auto">
                   Cancelar
                 </Button>

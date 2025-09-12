@@ -65,6 +65,7 @@ class Multa extends Model
     public function evaluationQuestions()
     {
         return $this->belongsToMany(EvaluationQuestion::class, 'evaluation_question_multa', 'multa_id', 'evaluation_question_id')
+                    ->withPivot('trigger_condition', 'trigger_value', 'is_active')
                     ->withTimestamps();
     }
 }
