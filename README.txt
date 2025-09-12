@@ -71,16 +71,16 @@ netstat -ano | findstr :3306
 
 Verás algo como:
 
-TCP    0.0.0.0:3306   0.0.0.0:0   LISTENING   1234
+TCP    0.0.0.0:3306   0.0.0.0:0   LISTENING   8680
 
 
-→ El número (1234) es el PID.
+→ El número (8680) es el PID.
 
 Identifica el programa con:
 
-tasklist /FI "PID eq 1234"
+tasklist /FI "PID eq 8680"
 
 
 Si confirmas que es otro MySQL/MariaDB, elimínalo:
 
-taskkill /PID 1234 /F
+taskkill /PID 8680 /F

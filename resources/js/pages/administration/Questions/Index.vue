@@ -167,49 +167,83 @@ const closeModals = () => {
 };
 
 // Funciones de acciones
+// Función helper para obtener filtros actuales
+const getCurrentFilters = () => {
+  const params: any = {};
+  if (searchQuery.value) params.search = searchQuery.value;
+  if (categoryFilter.value) params.category_id = categoryFilter.value;
+  if (typeFilter.value) params.question_type = typeFilter.value;
+  if (statusFilter.value) params.is_active = statusFilter.value;
+  if (showDeleted.value) params.show_deleted = 'true';
+  return params;
+};
+
+// Funciones de acciones modificadas
 const toggleStatus = (question: Question) => {
-  router.patch(`/admin/questions/${question.id}/toggle-status`, {}, {
+  const filters = getCurrentFilters();
+  router.patch(`/admin/questions/${question.id}/toggle-status`, filters, {
     preserveScroll: true,
     onSuccess: () => {
-      // La página se recargará automáticamente
+      // La página se recargará automáticamente con filtros preservados
     }
   });
 };
 
 const restoreQuestion = (question: Question) => {
-  router.patch(`/admin/questions/${question.id}/restore`, {}, {
+  const filters = getCurrentFilters();
+  router.patch(`/admin/questions/${question.id}/restore`, filters, {
     preserveScroll: true,
     onSuccess: () => {
-      // La página se recargará automáticamente
+      // La página se recargará automáticamente con filtros preservados
     }
   });
 };
 
 const forceDeleteQuestion = (question: Question) => {
   if (confirm('¿Estás seguro de que quieres eliminar permanentemente esta pregunta? Esta acción no se puede deshacer.')) {
+    const filters = getCurrentFilters();
     router.delete(`/admin/questions/${question.id}/force-delete`, {
+      data: filters,
       preserveScroll: true,
       onSuccess: () => {
-        // La página se recargará automáticamente
+        // La página se recargará automáticamente con filtros preservados
       }
     });
   }
 };
 
-// Handlers para los eventos de los modales
+// Handlers para los eventos de los modales modificados
 const handleCreated = () => {
-  router.reload();
-  closeModals();
+  const filters = getCurrentFilters();
+  router.get('/admin/questions', filters, {
+    preserveState: true,
+    preserveScroll: true,
+    onSuccess: () => {
+      closeModals();
+    }
+  });
 };
 
 const handleUpdated = () => {
-  router.reload();
-  closeModals();
+  const filters = getCurrentFilters();
+  router.get('/admin/questions', filters, {
+    preserveState: true,
+    preserveScroll: true,
+    onSuccess: () => {
+      closeModals();
+    }
+  });
 };
 
 const handleDeleted = () => {
-  router.reload();
-  closeModals();
+  const filters = getCurrentFilters();
+  router.get('/admin/questions', filters, {
+    preserveState: true,
+    preserveScroll: true,
+    onSuccess: () => {
+      closeModals();
+    }
+  });
 };
 
 // Eliminar todas las funciones de paginación:

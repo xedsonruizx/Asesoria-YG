@@ -145,7 +145,9 @@ class EvaluationQuestionController extends Controller
     
         EvaluationQuestion::create($questionData);
     
-        return redirect()->route('admin.questions.index')
+        // Preservar filtros en la redirección
+        $filters = $request->only(['search', 'category_id', 'question_type', 'is_active', 'show_deleted']);
+        return redirect()->route('admin.questions.index', $filters)
                        ->with('success', 'Pregunta creada exitosamente.');
     }
 
@@ -251,7 +253,9 @@ class EvaluationQuestionController extends Controller
             $this->updateDependentQuestionsOrder($question->id, $question->category_id);
         }
     
-        return redirect()->route('admin.questions.index')
+        // Preservar filtros en la redirección
+        $filters = $request->only(['search', 'category_id', 'question_type', 'is_active', 'show_deleted']);
+        return redirect()->route('admin.questions.index', $filters)
                        ->with('success', 'Pregunta actualizada exitosamente.');
     }
 
@@ -266,7 +270,7 @@ class EvaluationQuestionController extends Controller
         // o realizar otras operaciones necesarias para la sincronización
         
         // Log para debugging
-        \Log::info("Orden actualizado para pregunta ID: {$questionId} en categoría: {$categoryId}");
+        Log::info("Orden actualizado para pregunta ID: {$questionId} en categoría: {$categoryId}");
         
         // Aquí podrías agregar lógica adicional como:
         // - Invalidar cache de preguntas
@@ -284,10 +288,13 @@ class EvaluationQuestionController extends Controller
         // Usar soft delete en lugar de eliminación física
         $question->delete();
     
-        return redirect()->route('admin.questions.index')
+        // Preservar filtros en la redirección
+        $filters = request()->only(['search', 'category_id', 'question_type', 'is_active', 'show_deleted']);
+        return redirect()->route('admin.questions.index', $filters)
             ->with('success', 'Pregunta eliminada exitosamente. Seguirá apareciendo en reportes existentes.');
     }
     
+
     /**
      * Restaurar una pregunta eliminada
      */
@@ -296,10 +303,12 @@ class EvaluationQuestionController extends Controller
         $question = EvaluationQuestion::withTrashed()->findOrFail($id);
         $question->restore();
     
-        return redirect()->route('admin.questions.index')
+        // Preservar filtros en la redirección
+        $filters = request()->only(['search', 'category_id', 'question_type', 'is_active', 'show_deleted']);
+        return redirect()->route('admin.questions.index', $filters)
             ->with('success', 'Pregunta restaurada exitosamente.');
     }
-    
+
     /**
      * Eliminar permanentemente una pregunta
      */
@@ -309,13 +318,16 @@ class EvaluationQuestionController extends Controller
         
         // Verificar si la pregunta tiene respuestas asociadas
         if ($question->answers()->count() > 0) {
-            return redirect()->route('admin.questions.index')
+            $filters = request()->only(['search', 'category_id', 'question_type', 'is_active', 'show_deleted']);
+            return redirect()->route('admin.questions.index', $filters)
                 ->with('error', 'No se puede eliminar permanentemente la pregunta porque tiene respuestas asociadas.');
         }
     
         $question->forceDelete();
     
-        return redirect()->route('admin.questions.index')
+        // Preservar filtros en la redirección
+        $filters = request()->only(['search', 'category_id', 'question_type', 'is_active', 'show_deleted']);
+        return redirect()->route('admin.questions.index', $filters)
             ->with('success', 'Pregunta eliminada permanentemente.');
     }
 
@@ -328,7 +340,10 @@ class EvaluationQuestionController extends Controller
         $question->update(['is_active' => !$question->is_active]);
 
         $status = $question->is_active ? 'activada' : 'desactivada';
-        return redirect()->route('admin.questions.index')
+        
+        // Preservar filtros en la redirección
+        $filters = request()->only(['search', 'category_id', 'question_type', 'is_active', 'show_deleted']);
+        return redirect()->route('admin.questions.index', $filters)
             ->with('success', "Pregunta {$status} exitosamente.");
     }
 
@@ -362,6 +377,7 @@ class EvaluationQuestionController extends Controller
             
             $query = EvaluationQuestion::where('category_id', $categoryId)
                 ->where('is_active', true)
+                ->whereNull('deleted_at') // Excluir preguntas eliminadas
                 ->orderBy('order'); // Ordenar por order para mostrar
             
             if ($excludeId) {

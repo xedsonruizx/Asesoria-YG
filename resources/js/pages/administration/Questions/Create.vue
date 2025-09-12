@@ -131,7 +131,19 @@ const close = () => {
 };
 
 const submitForm = () => {
+  // Obtener filtros del componente padre si están disponibles
+  const currentUrl = new URL(window.location.href);
+  const filters: any = {};
+  
+  // Extraer filtros de la URL actual
+  if (currentUrl.searchParams.get('search')) filters.search = currentUrl.searchParams.get('search');
+  if (currentUrl.searchParams.get('category_id')) filters.category_id = currentUrl.searchParams.get('category_id');
+  if (currentUrl.searchParams.get('question_type')) filters.question_type = currentUrl.searchParams.get('question_type');
+  if (currentUrl.searchParams.get('is_active')) filters.is_active = currentUrl.searchParams.get('is_active');
+  if (currentUrl.searchParams.get('show_deleted')) filters.show_deleted = currentUrl.searchParams.get('show_deleted');
+  
   form.post('/admin/questions', {
+    data: { ...form.data(), ...filters },
     onSuccess: () => {
       emit('created');
       close();
