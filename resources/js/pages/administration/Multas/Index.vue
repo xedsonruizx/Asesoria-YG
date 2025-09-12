@@ -119,31 +119,58 @@ const closeModals = () => {
   selectedMulta.value = null;
 };
 
+// Función para obtener filtros actuales
+const getCurrentFilters = () => {
+  const filters: any = {};
+  if (searchQuery.value) filters.search = searchQuery.value;
+  if (statusFilter.value) filters.status = statusFilter.value;
+  if (showDeleted.value) filters.show_deleted = 'true';
+  return filters;
+};
+
 // Funciones de acciones
 const toggleStatus = (multa: Multa) => {
+  const currentFilters = getCurrentFilters();
   router.patch(`/multas/${multa.id}/toggle-status`, {}, {
     preserveScroll: true,
     onSuccess: () => {
-      // La página se recargará automáticamente
+      // Recargar la página con los filtros actuales
+      router.visit('/multas', {
+        data: currentFilters,
+        preserveState: true,
+        preserveScroll: true
+      });
     }
   });
 };
 
 const restoreMulta = (multa: Multa) => {
+  const currentFilters = getCurrentFilters();
   router.patch(`/multas/${multa.id}/restore`, {}, {
     preserveScroll: true,
     onSuccess: () => {
-      // La página se recargará automáticamente
+      // Recargar la página con los filtros actuales
+      router.visit('/multas', {
+        data: currentFilters,
+        preserveState: true,
+        preserveScroll: true
+      });
     }
   });
 };
 
 const forceDeleteMulta = (multa: Multa) => {
   if (confirm('¿Estás seguro de que quieres eliminar permanentemente esta multa? Esta acción no se puede deshacer.')) {
+    const currentFilters = getCurrentFilters();
     router.delete(`/multas/${multa.id}/force-delete`, {
       preserveScroll: true,
       onSuccess: () => {
-        // La página se recargará automáticamente
+        // Recargar la página con los filtros actuales
+        router.visit('/multas', {
+          data: currentFilters,
+          preserveState: true,
+          preserveScroll: true
+        });
       }
     });
   }
@@ -151,17 +178,26 @@ const forceDeleteMulta = (multa: Multa) => {
 
 // Handlers para los eventos de los modales
 const handleCreated = () => {
-  router.reload();
+  router.visit('/multas', {
+    data: getCurrentFilters(),
+    preserveState: true
+  });
   closeModals();
 };
 
 const handleUpdated = () => {
-  router.reload();
+  router.visit('/multas', {
+    data: getCurrentFilters(),
+    preserveState: true
+  });
   closeModals();
 };
 
 const handleDeleted = () => {
-  router.reload();
+  router.visit('/multas', {
+    data: getCurrentFilters(),
+    preserveState: true
+  });
   closeModals();
 };
 

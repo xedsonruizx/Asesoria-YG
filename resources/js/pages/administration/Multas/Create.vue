@@ -73,7 +73,16 @@ const triggerFileInput = () => {
 
 // Submit form
 const submit = () => {
+  // Obtener filtros de la URL actual
+  const urlParams = new URLSearchParams(window.location.search);
+  const filters: any = {};
+  if (urlParams.get('search')) filters.search = urlParams.get('search');
+  if (urlParams.get('status')) filters.status = urlParams.get('status');
+  if (urlParams.get('show_deleted')) filters.show_deleted = urlParams.get('show_deleted');
+  if (urlParams.get('page')) filters.page = urlParams.get('page');
+
   form.post('/multas', {
+    data: filters,
     onSuccess: () => {
       emit('created');
     },

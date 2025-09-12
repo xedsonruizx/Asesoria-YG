@@ -52,7 +52,16 @@ const deleteMulta = () => {
   
   processing.value = true;
   
+  // Obtener filtros de la URL actual
+  const urlParams = new URLSearchParams(window.location.search);
+  const filters: any = {};
+  if (urlParams.get('search')) filters.search = urlParams.get('search');
+  if (urlParams.get('status')) filters.status = urlParams.get('status');
+  if (urlParams.get('show_deleted')) filters.show_deleted = urlParams.get('show_deleted');
+  if (urlParams.get('page')) filters.page = urlParams.get('page');
+  
   router.delete(`/multas/${props.multa.id}`, {
+    data: filters,
     onSuccess: () => {
       emit('deleted');
       close();

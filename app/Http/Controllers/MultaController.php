@@ -17,6 +17,14 @@ class MultaController extends Controller
     {
         $query = Multa::query();
 
+        // Filtro para mostrar eliminados
+        if ($request->filled('show_deleted') && $request->show_deleted === 'true') {
+            $query->onlyTrashed();
+        } else {
+            // Si no se quieren mostrar eliminados, excluirlos explícitamente
+            $query->whereNull('deleted_at');
+        }
+
         // Filtro por estado
         if ($request->filled('status')) {
             if ($request->status === 'active') {
@@ -24,11 +32,6 @@ class MultaController extends Controller
             } elseif ($request->status === 'inactive') {
                 $query->inactive();
             }
-        }
-
-        // Filtro para mostrar eliminados
-        if ($request->filled('show_deleted') && $request->show_deleted === 'true') {
-            $query->onlyTrashed();
         }
 
         // Búsqueda por nombre
@@ -158,7 +161,7 @@ class MultaController extends Controller
             $multa->save();
 
             $status = $multa->is_active ? 'activada' : 'desactivada';
-            return redirect()->route('multas.index')
+            return redirect()->route('multas.index', request()->only(['search', 'status', 'show_deleted', 'page']))
                            ->with('success', "Multa {$status} exitosamente.");
         } catch (\Exception $e) {
             Log::error('Error al cambiar estado de multa: ' . $e->getMessage());
@@ -180,7 +183,7 @@ class MultaController extends Controller
 
             $multa->delete(); // Soft delete
 
-            return redirect()->route('multas.index')
+            return redirect()->route('multas.index', request()->only(['search', 'status', 'show_deleted', 'page']))
                            ->with('success', 'Multa eliminada exitosamente.');
         } catch (\Exception $e) {
             Log::error('Error al eliminar multa: ' . $e->getMessage());
@@ -197,7 +200,7 @@ class MultaController extends Controller
             $multa = Multa::onlyTrashed()->findOrFail($id);
             $multa->restore();
 
-            return redirect()->route('multas.index')
+            return redirect()->route('multas.index', request()->only(['search', 'status', 'show_deleted', 'page']))
                            ->with('success', 'Multa restaurada exitosamente.');
         } catch (\Exception $e) {
             Log::error('Error al restaurar multa: ' . $e->getMessage());
@@ -220,7 +223,7 @@ class MultaController extends Controller
 
             $multa->forceDelete();
 
-            return redirect()->route('multas.index')
+            return redirect()->route('multas.index', request()->only(['search', 'status', 'show_deleted', 'page']))
                            ->with('success', 'Multa eliminada permanentemente.');
         } catch (\Exception $e) {
             Log::error('Error al eliminar permanentemente multa: ' . $e->getMessage());
