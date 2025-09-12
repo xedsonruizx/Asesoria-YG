@@ -1,16 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { Head, router } from '@inertiajs/vue3';
-import { Save, Plus, Minus, ArrowLeft } from 'lucide-vue-next';
+import { router } from '@inertiajs/vue3';
+import { Save, Plus, Minus, ArrowLeft, X } from 'lucide-vue-next';
 import { useForm } from '@inertiajs/vue3';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Teleport } from 'vue';
 import InputError from '@/components/InputError.vue';
-import AppLayout from '@/layouts/AppLayout.vue';
 import QuestionDependency from '@/components/QuestionDependency.vue';
 import MultaAssignment from '@/components/MultaAssignment.vue';
-import { type BreadcrumbItem } from '@/types';
 import QuestionTypeInputs from '@/components/MyComponents/QuestionInputs/QuestionTypeInputs.vue';
 
 interface Category {
@@ -23,6 +22,12 @@ interface Category {
 interface Question {
   id: number;
   question_text: string;
+}
+
+interface Multa {
+  id: number;
+  name: string;
+  description?: string;
 }
 
 interface QuestionOption {
@@ -54,13 +59,24 @@ interface QuestionForm {
 interface Props {
   categories: Category[];
   availableQuestions?: Question[];
+  questions?: Question[];  // Agregar esta propiedad
+  multas?: Multa[];        // Agregar esta propiedad
 }
 
 const props = withDefaults(defineProps<Props>(), {
   categories: () => [],
   availableQuestions: () => [],
+  questions: () => [],     // Valor por defecto
+  multas: () => [],        // Valor por defecto
 });
 
+// Emits
+const emit = defineEmits<{
+  close: [];
+  created: [];
+}>();
+
+const isOpen = ref(true);
 const hasDependency = ref(false);
 const hasMultaAssignment = ref(false);
 
@@ -89,11 +105,6 @@ const form = useForm<QuestionForm>({
   is_active: true,
 });
 
-const breadcrumbs: BreadcrumbItem[] = [
-  { title: 'Preguntas', href: '/admin/questions' },
-  { title: 'Crear Nueva Pregunta', href: '/admin/questions/create' },
-];
-
 // Computed para mostrar campos específicos según el tipo
 const showOptions = computed(() => {
   return ['select', 'checkbox'].includes(form.question_type);
@@ -113,12 +124,17 @@ const showPoints = computed(() => {
   return !['select', 'radio', 'checkbox'].includes(form.question_type);
 });
 
-// Remover las funciones addOption y removeOption ya que están en los componentes
+// Función para cerrar el modal
+const close = () => {
+  isOpen.value = false;
+  emit('close');
+};
 
 const submitForm = () => {
   form.post('/admin/questions', {
     onSuccess: () => {
-      router.visit('/admin/questions');
+      emit('created');
+      close();
     },
   });
 };
@@ -132,18 +148,27 @@ const updateTotalPoints = (totalPoints: number) => {
 };
 
 // Watcher para resetear puntos cuando cambie el tipo de pregunta
-watch(() => form.question_type, (newType) => {
+watch(() => form.question_type, (newType, oldType) => {
   if (['select', 'radio', 'checkbox'].includes(newType)) {
     // Para tipos con opciones, los puntos se calcularán automáticamente
     form.points = 0;
   } else {
     // Para otros tipos, establecer puntos por defecto
     form.points = 1;
+    // Limpiar opciones si el nuevo tipo no las necesita
+    form.options = [];
+  }
+  
+  // Limpiar campos específicos según el tipo anterior
+  if (oldType && !['text', 'textarea', 'number'].includes(newType)) {
+    form.placeholder = '';
+  }
+  
+  if (oldType && newType !== 'number') {
+    form.min_value = null;
+    form.max_value = null;
   }
 });
-const goBack = () => {
-  router.visit('/admin/questions');
-};
 
 const availableQuestions = ref<Question[]>([]);
 
@@ -230,41 +255,45 @@ watch(hasDependency, (newValue) => {
 </script>
 
 <template>
-  <Head title="Crear Nueva Pregunta" />
-
-  <AppLayout :breadcrumbs="breadcrumbs">
-    <div class="space-y-6 p-6">
-      <!-- Header -->
-      <div class="bg-card rounded-lg p-6 shadow-sm border border-border">
-        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
-          <div class="flex-1">
-            <h1 class="text-xl sm:text-2xl font-bold mb-2 text-foreground">Crear Nueva Pregunta</h1>
-            <p class="text-muted-foreground text-sm sm:text-base">Completa los campos para crear una nueva pregunta de evaluación</p>
-          </div>
-          <Button @click="goBack" variant="outline" class="inline-flex items-center gap-2">
-            <ArrowLeft class="h-4 w-4" />
-            Volver
-          </Button>
+  <Teleport to="body">
+    <div 
+      v-if="isOpen" 
+      class="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm overflow-y-auto"
+      @click="close"
+    >
+      <!-- Modal Container - Responsive -->
+      <div 
+        class="relative w-full max-w-sm sm:max-w-2xl md:max-w-4xl lg:max-w-6xl xl:max-w-7xl min-h-[90vh] sm:min-h-0 sm:max-h-[95vh] bg-background rounded-none sm:rounded-lg shadow-2xl border-0 sm:border overflow-hidden mt-0 sm:mt-4"
+        @click.stop
+      >
+        <!-- Header -->
+        <div class="flex items-center justify-between p-4 sm:p-6 border-b bg-muted/30 sticky top-0 z-10">
+          <h2 class="text-lg sm:text-xl font-semibold text-foreground">Nueva Pregunta</h2>
+          <button 
+            @click="close" 
+            class="p-2 hover:bg-muted rounded-md transition-colors"
+          >
+            <X class="w-4 h-4" />
+          </button>
         </div>
-      </div>
-
-      <!-- Formulario -->
-      <div class="bg-card rounded-lg shadow-sm border border-border">
-        <div class="p-6">
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Formulario principal -->
-            <div class="lg:col-span-2">
-              <form @submit.prevent="submitForm" class="space-y-6">
+        
+        <!-- Content - Responsive Layout -->
+        <div class="flex flex-col lg:flex-row h-[calc(90vh-64px)] sm:h-[calc(95vh-80px)]">
+          <!-- Main Form Area -->
+          <div class="flex-1 p-4 sm:p-6 overflow-y-auto">
+            <form @submit.prevent="submitForm" class="space-y-4 sm:space-y-6">
+              <!-- Grid responsive -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                 <!-- Categoría -->
-                <div>
-                  <Label for="category_id">Categoría *</Label>
-                  <select 
-                    id="category_id"
+                <div class="space-y-2 md:col-span-2 lg:col-span-1">
+                  <Label for="category">Categoría *</Label>
+                  <select
+                    id="category"
                     v-model="form.category_id"
-                    class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     required
                   >
-                    <option value="null" disabled>Seleccionar categoría</option>
+                    <option value="null">Seleccionar categoría</option>
                     <option v-for="category in categories" :key="category.id" :value="category.id">
                       {{ category.name }}
                     </option>
@@ -272,42 +301,76 @@ watch(hasDependency, (newValue) => {
                   <InputError :message="form.errors.category_id" />
                 </div>
 
-                <!-- Texto de la pregunta -->
-                <div>
+                <!-- Texto de la Pregunta -->
+                <div class="space-y-2 md:col-span-2">
                   <Label for="question_text">Texto de la Pregunta *</Label>
-                  <textarea 
+                  <textarea
                     id="question_text"
                     v-model="form.question_text"
                     rows="3"
-                    class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     placeholder="Escribe el texto de la pregunta..."
                     required
                   ></textarea>
                   <InputError :message="form.errors.question_text" />
                 </div>
 
-                <!-- Tipo de pregunta -->
-                <div>
+                <!-- Tipo de Pregunta -->
+                <div class="space-y-2">
                   <Label for="question_type">Tipo de Pregunta *</Label>
-                  <select 
+                  <select
                     id="question_type"
                     v-model="form.question_type"
-                    class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     required
                   >
                     <option value="text">Texto</option>
                     <option value="textarea">Texto largo</option>
-                    <option value="select">Selección (dropdown)</option>
-                    <option value="radio">Selección única (radio buttons)</option>
+                    <option value="select">Selección</option>
+                    <option value="radio">Radio</option>
                     <option value="number">Número</option>
-                    <option value="checkbox">Selección múltiple (checkboxes)</option>
+                    <option value="checkbox">Casillas</option>
                   </select>
                   <InputError :message="form.errors.question_type" />
                 </div>
 
+                <!-- Puntos -->
+                <div v-if="showPoints" class="space-y-2">
+                  <Label for="points">Puntos *</Label>
+                  <Input
+                    id="points"
+                    v-model.number="form.points"
+                    type="number"
+                    min="0"
+                    required
+                  />
+                  <InputError :message="form.errors.points" />
+                </div>
 
+                <!-- Puntos automáticos para tipos con opciones -->
+                <div v-else class="space-y-2">
+                  <Label>Puntos (Calculados automáticamente)</Label>
+                  <div class="text-sm text-muted-foreground bg-muted p-2 rounded">
+                    Total de puntos: {{ form.points }}
+                  </div>
+                </div>
 
-                <!-- Campos específicos del tipo de pregunta -->
+                <!-- Orden -->
+                <div class="space-y-2">
+                  <Label for="order">Orden *</Label>
+                  <Input
+                    id="order"
+                    v-model.number="form.order"
+                    type="number"
+                    min="1"
+                    required
+                  />
+                  <InputError :message="form.errors.order" />
+                </div>
+              </div>
+
+              <!-- Componentes adicionales -->
+              <div class="space-y-4 sm:space-y-6">
                 <QuestionTypeInputs
                   :question-type="form.question_type"
                   :placeholder="form.placeholder"
@@ -321,111 +384,73 @@ watch(hasDependency, (newValue) => {
                   @update:totalPoints="updateTotalPoints"
                   :errors="form.errors"
                 />
-
-                <!-- Puntos -->
-                <div v-if="showPoints">
-                  <Label for="points">Puntos *</Label>
-                  <Input 
-                    id="points"
-                    v-model.number="form.points"
-                    type="number"
-                    min="0"
-                    max="100"
-                    required
+                
+                <!-- Dependencias de Pregunta -->
+                <div class="space-y-4">
+                  
+                  <QuestionDependency 
+                    v-model="hasDependency"
+                    :show-condition="form.show_condition"
+                    @update:show-condition="form.show_condition = $event"
+                    :category-id="form.category_id"
+                    :errors="form.errors"
                   />
-                  <InputError :message="form.errors.points" />
-                </div>
-
-                <!-- Orden -->
-                <div>
-                  <Label for="order">Orden *</Label>
-                  <Input 
-                    id="order"
-                    v-model.number="form.order"
-                    type="number"
-                    min="1"
-                    required
-                  />
-                  <InputError :message="form.errors.order" />
-                  <p class="text-sm text-muted-foreground mt-1">
-                    El orden debe ser único dentro de la categoría seleccionada
-                  </p>
-                </div>
-
-
-
-                <!-- Dependencias de pregunta -->
-                <QuestionDependency
-                  v-model="hasDependency"
-                  v-model:show-condition="form.show_condition"
-                  :category-id="form.category_id"
-                  :errors="form.errors"
-                />
-
-                <!-- Asignación de multas -->
-                <MultaAssignment
-                  v-model="hasMultaAssignment"
-                  v-model:multa-condition="form.multa_condition"
-                  :errors="form.errors"
-                />
-
-
-
-
-                <!-- Botones -->
-                <div class="flex justify-end gap-3 pt-6">
-                  <Button @click="goBack" type="button" variant="outline">
-                    Cancelar
-                  </Button>
-                  <Button type="submit" :disabled="form.processing">
-                    <Save class="h-4 w-4 mr-2" />
-                    {{ form.processing ? 'Guardando...' : 'Guardar Pregunta' }}
-                  </Button>
-                </div>
-              </form>
-            </div>
-
-            <!-- Sidebar con información -->
-            <div class="lg:col-span-1">
-              <div class="bg-muted rounded-lg p-4">
-                <h3 class="font-medium text-foreground mb-4">Tipos de Pregunta</h3>
-                <div class="space-y-3 text-sm">
-                  <div>
-                    <strong>Texto:</strong> Campo de texto simple
-                  </div>
-                  <div>
-                    <strong>Texto largo:</strong> Área de texto para respuestas extensas
-                  </div>
-                  <div>
-                    <strong>Selección:</strong> Lista desplegable con opciones
-                  </div>
-                  <div>
-                    <strong>Radio:</strong> Selección única con opciones personalizables
-                  </div>
-                  <div>
-                    <strong>Número:</strong> Campo numérico con validación
-                  </div>
-                  <div>
-                    <strong>Casillas:</strong> Múltiples opciones seleccionables
-                  </div>
-                  <!-- <div>
-                    <strong>Sí/No:</strong> Pregunta de respuesta binaria
-                  </div> -->
                 </div>
                 
-                <div class="mt-6">
-                  <!-- <h4 class="font-medium text-foreground mb-2">Campo Orden</h4>
-                  <p class="text-sm text-muted-foreground">
-                    Define la secuencia en que aparecen las preguntas. Número menor = aparece primero.
-                  </p> -->
+                                <!-- Asignación de Multas -->
+                <div class="space-y-4">
+                  
+                  <MultaAssignment 
+                    v-if="props.multas && props.multas.length > 0"
+                    :multas="props.multas"
+                    :multa-condition="form.multa_condition"
+                    @update:multa-condition="form.multa_condition = $event"
+                    :errors="form.errors"
+                  />
+                </div>
+              </div>
+              
+              <!-- Botones - Sticky en móvil -->
+              <div class="sticky bottom-0 bg-background border-t pt-4 mt-6 flex flex-col sm:flex-row justify-end gap-3">
+                <Button type="button" variant="outline" @click="close" class="w-full sm:w-auto">
+                  Cancelar
+                </Button>
+                <Button type="submit" :disabled="form.processing" class="w-full sm:w-auto">
+                  <Save class="w-4 h-4 mr-2" />
+                  Guardar Pregunta
+                </Button>
+              </div>
+            </form>
+          </div>
+          
+          <!-- Sidebar - Oculto en móvil, visible en desktop -->
+          <div class="hidden lg:block w-80 border-l bg-muted/20 p-6 overflow-y-auto">
+            <div class="space-y-4">
+              <h3 class="font-semibold text-foreground">Tipos de Pregunta</h3>
+              <div class="space-y-3 text-sm">
+                <div class="p-3 bg-background rounded-md">
+                  <strong>Texto:</strong> Campo de texto simple
+                </div>
+                <div class="p-3 bg-background rounded-md">
+                  <strong>Texto largo:</strong> Área de texto para respuestas extensas
+                </div>
+                <div class="p-3 bg-background rounded-md">
+                  <strong>Selección:</strong> Lista desplegable con opciones
+                </div>
+                <div class="p-3 bg-background rounded-md">
+                  <strong>Radio:</strong> Selección única con opciones personalizables
+                </div>
+                <div class="p-3 bg-background rounded-md">
+                  <strong>Número:</strong> Campo numérico con validación
+                </div>
+                <div class="p-3 bg-background rounded-md">
+                  <strong>Casillas:</strong> Múltiples opciones seleccionables
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-
-   
     </div>
-  </AppLayout>
+  </Teleport>
 </template>

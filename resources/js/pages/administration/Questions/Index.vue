@@ -1,592 +1,853 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
+import route from 'ziggy-js';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Button } from '@/components/ui/button';
-import { Plus, Edit, Trash2, Search, Filter, Users } from 'lucide-vue-next';
+import CreateModal from './Create.vue';
+import EditModal from './Edit.vue';
+import DeleteModal from './Delete.vue';
+import { Plus, Edit, Trash2, Eye, ChevronLeft, ChevronRight, FileText, Calendar, Download, AlertTriangle, RotateCcw, Power, PowerOff, Users } from 'lucide-vue-next';
 import { type BreadcrumbItem } from '@/types';
 
-// Interfaces
+// Props del backend
 interface Category {
-    id: number;
-    name: string;
-    slug: string;
-    description?: string;
-    color?: string;
-    icon?: string;
-    is_active: boolean;
+  id: number;
+  name: string;
+  slug: string;
+  description?: string;
+  color?: string;
+  icon?: string;
+  is_active: boolean;
 }
 
 interface Question {
-    id: number;
-    category_id: number;
-    question_text: string;
-    question_type: string;
-    options?: string[];
-    placeholder?: string;
-    min_value?: number;
-    max_value?: number;
-    points: number;
-    order: number;
-    show_condition?: {
-        parent_question_id: number | null; // Ahora será el ID de la pregunta padre
-        operator: string;
-        expected_value: any;
-        value?: any;
-    };
-    validation_rules?: any;
-    is_required: boolean;
-    is_active: boolean;
-    created_at: string;
-    updated_at: string;
-    category: Category;
-    has_answers: boolean;
-    answers_count: number;
+  id: number;
+  category_id: number;
+  question_text: string;
+  question_type: string;
+  options?: string[];
+  placeholder?: string;
+  min_value?: number;
+  max_value?: number;
+  points: number;
+  order: number;
+  show_condition?: {
+    parent_question_id: number | null;
+    operator: string;
+    expected_value: any;
+    value?: any;
+  };
+  validation_rules?: any;
+  is_required: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string;
+  category: Category;
+  has_answers: boolean;
+  answers_count: number;
+  status_text: string;
 }
 
-interface Stats {
+const props = withDefaults(defineProps<{
+  questions: Question[];
+  categories: Category[];
+  stats?: {
     total: number;
     active: number;
     inactive: number;
     with_answers: number;
-}
-
-interface QuestionsData {
-    questions: Question[];
-    stats: Stats;
-    categories: Category[];
-    filters: {
-        search?: string;
-        category_id?: number;
-        question_type?: string;
-        is_active?: boolean;
-    };
-}
-
-// Props
-const props = withDefaults(defineProps<QuestionsData>(), {
-    questions: () => [],
-    stats: () => ({ total: 0, active: 0, inactive: 0, with_answers: 0 }),
-    categories: () => [],
-    filters: () => ({}),
+  };
+  filters?: {
+    search?: string;
+    category_id?: number;
+    question_type?: string;
+    is_active?: string;
+    show_deleted?: string;
+  };
+}>(), {
+  questions: () => [],
+  categories: () => [],
+  stats: () => ({ total: 0, active: 0, inactive: 0, with_answers: 0 }),
+  filters: () => ({})
 });
 
-// Reactive variables
-const search = ref(props.filters.search || '');
-const selectedCategory = ref(props.filters.category_id?.toString() || '');
-const selectedType = ref(props.filters.question_type || '');
-const selectedStatus = ref(props.filters.is_active?.toString() || '');
-const questionToDelete = ref<Question | null>(null);
+// Estados de los modales
+const showCreateModal = ref(false);
+const showEditModal = ref(false);
 const showDeleteModal = ref(false);
+const selectedQuestion = ref<Question | null>(null);
 
-// Constants
-const questionTypes = [
-    { value: 'text', label: 'Texto' },
-    { value: 'textarea', label: 'Área de texto' },
-    { value: 'select', label: 'Selección' },
-    { value: 'number', label: 'Número' },
-    { value: 'checkbox', label: 'Casillas' },
-    { value: 'yes_no', label: 'Sí/No' },
-];
+// Estados de filtros
+const searchQuery = ref(props.filters?.search || '');
+const categoryFilter = ref(props.filters?.category_id?.toString() || '');
+const typeFilter = ref(props.filters?.question_type || '');
+const statusFilter = ref(props.filters?.is_active || '');
+const showDeleted = ref(props.filters?.show_deleted === 'true');
+
+// Obtener la página actual de Inertia
+const page = usePage();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Preguntas', href: '/admin/questions' },
+    {
+        title: 'Preguntas',
+        href: '/admin/questions',
+    },
 ];
 
-// Utility functions
-const truncateText = (text: string, maxLength: number) => {
-    return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+// Tipos de preguntas
+const questionTypes = [
+  { value: 'text', label: 'Texto' },
+  { value: 'textarea', label: 'Área de texto' },
+  { value: 'select', label: 'Selección' },
+  { value: 'number', label: 'Número' },
+  { value: 'checkbox', label: 'Casillas' },
+  { value: 'yes_no', label: 'Sí/No' },
+];
+
+// Funciones
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('es-ES', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
 };
 
 const getTypeLabel = (type: string) => {
-    const typeObj = questionTypes.find(t => t.value === type);
-    return typeObj ? typeObj.label : type;
+  const typeObj = questionTypes.find(t => t.value === type);
+  return typeObj ? typeObj.label : type;
 };
 
-// Navigation functions
-const openCreateQuestion = () => {
-    if (typeof window !== 'undefined') {
-        window.open('/admin/questions/create', '_blank');
-    }
-};
-
-const openEditInNewTab = (questionId: number) => {
-    window.open(`/admin/questions/${questionId}/edit`, '_blank');
-};
-
-// Filter functions
+// Funciones de filtrado
 const applyFilters = () => {
-    const params: any = {};
-    
-    if (search.value) params.search = search.value;
-    if (selectedCategory.value) params.category_id = selectedCategory.value;
-    if (selectedType.value) params.question_type = selectedType.value;
-    if (selectedStatus.value) params.is_active = selectedStatus.value === 'true';
-    
-    router.get('/admin/questions', params, {
-        preserveState: true,
-        replace: true,
-    });
+  const params: any = {};
+  
+  if (searchQuery.value) params.search = searchQuery.value;
+  if (categoryFilter.value) params.category_id = categoryFilter.value;
+  if (typeFilter.value) params.question_type = typeFilter.value;
+  if (statusFilter.value) params.is_active = statusFilter.value;
+  if (showDeleted.value) params.show_deleted = 'true';
+  
+  router.get('/admin/questions', params, {
+    preserveState: true,
+    replace: true
+  });
 };
 
 const clearFilters = () => {
-    search.value = '';
-    selectedCategory.value = '';
-    selectedType.value = '';
-    selectedStatus.value = '';
-    
-    router.get('/admin/questions', {}, {
-        preserveState: true,
-        replace: true,
-    });
+  searchQuery.value = '';
+  categoryFilter.value = '';
+  typeFilter.value = '';
+  statusFilter.value = '';
+  showDeleted.value = false;
+  router.get('/admin/questions');
 };
 
-// Question management functions
+// Funciones de modales
+const openCreateModal = () => {
+  showCreateModal.value = true;
+};
+
+const openEditModal = (question: Question) => {
+  selectedQuestion.value = question;
+  showEditModal.value = true;
+};
+
+const openDeleteModal = (question: Question) => {
+  selectedQuestion.value = question;
+  showDeleteModal.value = true;
+};
+
+const closeModals = () => {
+  showCreateModal.value = false;
+  showEditModal.value = false;
+  showDeleteModal.value = false;
+  selectedQuestion.value = null;
+};
+
+// Funciones de acciones
 const toggleStatus = (question: Question) => {
-    router.patch(`/admin/questions/${question.id}/toggle-status`, {}, {
-        preserveState: true,
-    });
-};
-
-const confirmDelete = (question: Question) => {
-    questionToDelete.value = question;
-    showDeleteModal.value = true;
-};
-
-const closeDeleteModal = () => {
-    showDeleteModal.value = false;
-    questionToDelete.value = null;
-};
-
-const deleteQuestion = () => {
-    if (questionToDelete.value) {
-        router.delete(`/admin/questions/${questionToDelete.value.id}`, {
-            preserveState: true,
-            onSuccess: () => {
-                closeDeleteModal();
-            },
-        });
+  router.patch(`/admin/questions/${question.id}/toggle-status`, {}, {
+    preserveScroll: true,
+    onSuccess: () => {
+      // La página se recargará automáticamente
     }
+  });
 };
 
-// Computed property para optimizar las llamadas a getDependencyInfo
-const questionDependencyInfo = computed(() => {
-    const dependencyMap = new Map();
-    
-    props.questions.forEach(question => {
-        const dependencies = [];
-        let canDelete = true;
-        
-        // Si tiene respuestas asociadas (otras preguntas dependen de esta)
-        const dependents = props.questions?.filter(q =>
-            q.show_condition &&
-            q.show_condition.parent_question_id === question.id // Usar ID en lugar de order
-        ) || [];
+const restoreQuestion = (question: Question) => {
+  router.patch(`/admin/questions/${question.id}/restore`, {}, {
+    preserveScroll: true,
+    onSuccess: () => {
+      // La página se recargará automáticamente
+    }
+  });
+};
 
-        if (dependents && dependents.length > 0) {
-            // Mostrar los órdenes de las preguntas que dependen de esta
-            const dependentOrders = dependents.map(q => q.order).sort((a, b) => a - b);
-            dependencies.push({
-                text: `Dependen de pregunta Orden: ${dependentOrders.join(', ')}`,
-                class: 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300'
-            });
-            canDelete = false;
-        }
-        
-        // Si esta pregunta depende de otra
-        if (question.show_condition) {
-            const parentQuestionId = question.show_condition.parent_question_id;
-            const operator = question.show_condition.operator || 'equals';
-            const expectedValue = question.show_condition.expected_value || question.show_condition.value;
-                
-            if (parentQuestionId !== null && parentQuestionId !== undefined) {
-                const parentQuestion = props.questions.find(q => q.id === parentQuestionId); // Usar ID
-                const parentText = parentQuestion ? truncateText(parentQuestion.question_text, 25) : `Pregunta ID #${parentQuestionId}`;
-                const parentOrder = parentQuestion ? parentQuestion.order : parentQuestionId;
-                let operatorText = '';
-                switch (operator) {
-                    case 'equals':
-                        operatorText = '=';
-                        break;
-                    case 'not_equals':
-                        operatorText = '≠';
-                        break;
-                    case 'greater_than':
-                        operatorText = '>';
-                        break;
-                    case 'less_than':
-                        operatorText = '<';
-                        break;
-                    case 'contains':
-                        operatorText = 'contiene';
-                        break;
-                    case 'not_contains':
-                        operatorText = 'no contiene';
-                        break;
-                    default:
-                        operatorText = operator;
-                }
-                
-                let displayValue;
-                if (expectedValue === true) {
-                    displayValue = 'Sí';
-                } else if (expectedValue === false) {
-                    displayValue = 'No';
-                } else if (expectedValue !== undefined && expectedValue !== null) {
-                    displayValue = String(expectedValue);
-                } else {
-                    displayValue = 'vacio';
-                }
-                
-                dependencies.push({
-                    text: `Depende de: Orden ${parentOrder}`,
-                    class: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300'
-                });
-            }
-        }
-        
-        // Determinar el resultado final
-        let result;
-        if (!dependencies || dependencies.length === 0) {
-            result = {
-                text: 'Sin dependencias',
-                class: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
-                canDelete: true,
-                dependencies: []
-            };
-        } else if (dependencies.length > 1) {
-            result = {
-                text: dependencies.map(dep => dep.text).join(' • '),
-                class: 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300',
-                canDelete,
-                dependencies
-            };
-        } else {
-            result = {
-                text: dependencies[0].text,
-                class: dependencies[0].class,
-                canDelete,
-                dependencies
-            };
-        }
-        
-        dependencyMap.set(question.id, result);
+const forceDeleteQuestion = (question: Question) => {
+  if (confirm('¿Estás seguro de que quieres eliminar permanentemente esta pregunta? Esta acción no se puede deshacer.')) {
+    router.delete(`/admin/questions/${question.id}/force-delete`, {
+      preserveScroll: true,
+      onSuccess: () => {
+        // La página se recargará automáticamente
+      }
     });
-    
-    return dependencyMap;
-});
+  }
+};
 
-// Función helper para obtener la info de dependencias
-const getDependencyInfoOptimized = (question: Question) => {
-    return questionDependencyInfo.value.get(question.id) || {
-        text: 'Sin dependencias',
-        class: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
-        canDelete: true,
-        dependencies: []
+// Handlers para los eventos de los modales
+const handleCreated = () => {
+  router.reload();
+  closeModals();
+};
+
+const handleUpdated = () => {
+  router.reload();
+  closeModals();
+};
+
+const handleDeleted = () => {
+  router.reload();
+  closeModals();
+};
+
+// Eliminar todas las funciones de paginación:
+// - goToPage()
+// - goToPreviousPage() 
+// - goToNextPage()
+// - getPageNumbers()
+
+// Y eliminar la sección de paginación del template
+const goToPage = (page: number) => {
+  if (page >= 1 && page <= (props.questions?.last_page || 1)) {
+    const params: any = { page };
+    if (searchQuery.value) params.search = searchQuery.value;
+    if (categoryFilter.value) params.category_id = categoryFilter.value;
+    if (typeFilter.value) params.question_type = typeFilter.value;
+    if (statusFilter.value) params.is_active = statusFilter.value;
+    if (showDeleted.value) params.show_deleted = 'true';
+    
+    router.visit('/admin/questions', {
+      data: params,
+      preserveState: true,
+      preserveScroll: true,
+    });
+  }
+};
+
+const goToPreviousPage = () => {
+  const currentPage = props.questions?.current_page || 1;
+  if (currentPage > 1) {
+    goToPage(currentPage - 1);
+  }
+};
+
+const goToNextPage = () => {
+  const currentPage = props.questions?.current_page || 1;
+  const lastPage = props.questions?.last_page || 1;
+  if (currentPage < lastPage) {
+    goToPage(currentPage + 1);
+  }
+};
+
+// Generar números de página para mostrar
+const getPageNumbers = () => {
+  const currentPage = props.questions?.current_page || 1;
+  const lastPage = props.questions?.last_page || 1;
+  const pages: number[] = [];
+  
+  // Verificar que tenemos datos válidos
+  if (!props.questions || !currentPage || !lastPage) {
+    return [];
+  }
+  
+  // Mostrar máximo 5 páginas
+  let startPage = Math.max(1, currentPage - 2);
+  let endPage = Math.min(lastPage, startPage + 4);
+  
+  // Ajustar si estamos cerca del final
+  if (endPage - startPage < 4) {
+    startPage = Math.max(1, endPage - 4);
+  }
+  
+  for (let i = startPage; i <= endPage; i++) {
+    pages.push(i);
+  }
+  
+  return pages;
+};
+
+// Funciones de utilidad
+const truncateText = (text: string, maxLength: number) => {
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
+};
+
+// Función para obtener información de dependencias
+const getDependencyInfo = (question: Question) => {
+  const dependencies = [];
+  let canDelete = true;
+  
+  // Si tiene respuestas asociadas
+  if (question.has_answers) {
+    dependencies.push({
+      text: `${question.answers_count} respuestas`,
+      class: 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300'
+    });
+    canDelete = false;
+  }
+  
+  // Si esta pregunta depende de otra
+  if (question.show_condition) {
+    const parentQuestionId = question.show_condition.parent_question_id;
+    if (parentQuestionId !== null && parentQuestionId !== undefined) {
+      const parentQuestion = props.questions.find(q => q.id === parentQuestionId);
+      const parentOrder = parentQuestion ? parentQuestion.order : parentQuestionId;
+      dependencies.push({
+        text: `Depende de: Orden ${parentOrder}`,
+        class: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300'
+      });
+    }
+  }
+  
+  // Verificar si otras preguntas dependen de esta
+  const dependents = props.questions.filter(q =>
+    q.show_condition &&
+    q.show_condition.parent_question_id === question.id
+  );
+  
+  if (dependents.length > 0) {
+    const dependentOrders = dependents.map(q => q.order).sort((a, b) => a - b);
+    dependencies.push({
+      text: `Dependen: Órdenes ${dependentOrders.join(', ')}`,
+      class: 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300'
+    });
+    canDelete = false;
+  }
+  
+  if (dependencies.length === 0) {
+    return {
+      text: 'Sin dependencias',
+      class: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
+      canDelete: true
     };
+  } else if (dependencies.length > 1) {
+    return {
+      text: dependencies.map(dep => dep.text).join(' • '),
+      class: 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300',
+      canDelete
+    };
+  } else {
+    return {
+      text: dependencies[0].text,
+      class: dependencies[0].class,
+      canDelete
+    };
+  }
 };
 </script>
 
 <template>
-    <Head title="Gestión de Preguntas" />
-
-    <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="space-y-6 p-6">
-            <!-- Header con información y botón de crear -->
-            <div class="bg-card rounded-lg p-6 shadow-sm border border-border">
-                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
-                    <div class="flex-1">
-                        <h1 class="text-xl sm:text-2xl font-bold mb-2 text-foreground">Gestión de Preguntas</h1>
-                        <p class="text-muted-foreground text-sm sm:text-base">Administra las preguntas de evaluación del sistema</p>
-                    </div>
-                    <Button @click="openCreateQuestion" class="inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md transition-colors font-medium text-xs sm:text-sm w-full sm:w-auto">
-                        <Plus class="h-4 w-4 flex-shrink-0" />
-                        <span class="truncate">Nueva Pregunta</span>
-                    </Button>
-                </div>
-                
-                <!-- Estadísticas -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div class="bg-muted px-3 sm:px-4 py-2 sm:py-3 rounded-md">
-                        <div class="flex items-center gap-2">
-                            <div>
-                                <p class="text-xs text-muted-foreground">Total</p>
-                                <p class="font-semibold text-foreground">{{ props.stats.total }}</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="bg-green-50 dark:bg-green-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md">
-                        <div class="flex items-center gap-2">
-                            <div>
-                                <p class="text-xs text-green-700 dark:text-green-300">Activas</p>
-                                <p class="font-semibold text-green-700 dark:text-green-300">{{ props.stats.active }}</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="bg-red-50 dark:bg-red-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md">
-                        <div class="flex items-center gap-2">
-                            <div>
-                                <p class="text-xs text-red-700 dark:text-red-300">Inactivas</p>
-                                <p class="font-semibold text-red-700 dark:text-red-300">{{ props.stats.inactive }}</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="bg-blue-50 dark:bg-blue-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md">
-                        <div class="flex items-center gap-2">
-                            <div>
-                                <p class="text-xs text-blue-700 dark:text-blue-300">Con Respuestas</p>
-                                <p class="font-semibold text-blue-700 dark:text-blue-300">{{ props.stats.with_answers }}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Filtros -->
-            <div class="bg-card rounded-lg p-4 shadow-sm border border-border">
-                <div class="flex items-center gap-2 mb-4">
-                    <Filter class="h-4 w-4" />
-                    <h3 class="font-medium">Filtros</h3>
-                </div>
-                <div class="grid gap-4 md:grid-cols-5">
-                    <div class="relative">
-                        <Search class="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <input
-                            v-model="search"
-                            type="text"
-                            placeholder="Buscar pregunta..."
-                            class="w-full pl-8 pr-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
-                            @keyup.enter="applyFilters"
-                        />
-                    </div>
-                    
-                    <select 
-                        v-model="selectedCategory"
-                        class="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
-                    >
-                        <option value="">Todas las categorías</option>
-                        <option 
-                            v-for="category in props.categories" 
-                            :key="category.id" 
-                            :value="category.id.toString()"
-                        >
-                            {{ category.name }}
-                        </option>
-                    </select>
-
-                    <select 
-                        v-model="selectedType"
-                        class="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
-                    >
-                        <option value="">Todos los tipos</option>
-                        <option 
-                            v-for="type in questionTypes" 
-                            :key="type.value" 
-                            :value="type.value"
-                        >
-                            {{ type.label }}
-                        </option>
-                    </select>
-
-                    <select 
-                        v-model="selectedStatus"
-                        class="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
-                    >
-                        <option value="">Todos los estados</option>
-                        <option value="true">Activas</option>
-                        <option value="false">Inactivas</option>
-                    </select>
-
-                    <div class="flex gap-2">
-                        <Button @click="applyFilters" class="flex-1">
-                            Aplicar
-                        </Button>
-                        <Button @click="clearFilters" variant="outline">
-                            Limpiar
-                        </Button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Tabla de preguntas -->
-            <div class="bg-card rounded-lg overflow-hidden shadow-sm border border-border">
-                <div v-if="props.questions && props.questions.length > 0">
-                    <!-- Encabezados -->
-                    <div class="bg-muted/30 p-4 border-b border-border">
-                        <div class="grid grid-cols-1 md:grid-cols-7 gap-4 font-semibold text-foreground">
-                            <div class="md:col-span-2">Pregunta</div>
-                            <div class="hidden md:block">Categoría</div>
-                            <div class="hidden md:block">Tipo</div>
-                            <div class="hidden md:block">Puntos</div>
-                            <div class="hidden md:block">Dependencias</div>
-                            <div class="hidden md:block">Acciones</div>
-                        </div>
-                    </div>
-                    
-                    <!-- Filas de datos -->
-                    <div>
-                        <div 
-                            v-for="question in props.questions" 
-                            :key="question.id"
-                            class="border-b border-border p-4 hover:bg-muted/50 transition-colors group"
-                        >
-                            <div class="grid grid-cols-1 md:grid-cols-7 gap-4 items-start md:items-center">
-                                <!-- Pregunta -->
-                                <div class="md:col-span-2">
-                                    <div class="font-medium text-foreground mb-1">
-                                        {{ truncateText(question.question_text, 60) }}
-                                    </div>
-                                    <div class="text-sm text-muted-foreground">
-                                        Orden: {{ question.order }} • 
-                                        <span :class="question.is_active ? 'text-green-600' : 'text-red-600'">
-                                            {{ question.is_active ? 'Activa' : 'Inactiva' }}
-                                        </span>
-                                    </div>
-                                    
-                                    <!-- Información adicional en móvil -->
-                                    <div class="md:hidden mt-3 space-y-2">
-                                        <div class="text-sm">
-                                            <strong class="text-foreground">Categoría:</strong> 
-                                            <span class="inline-flex px-2 py-1 text-xs font-medium bg-muted text-muted-foreground rounded-full ml-1">
-                                                {{ question.category.name }}
-                                            </span>
-                                        </div>
-                                        <div class="text-sm">
-                                            <strong class="text-foreground">Tipo:</strong> 
-                                            <span class="text-muted-foreground">{{ getTypeLabel(question.question_type) }}</span>
-                                        </div>
-                                        <div class="text-sm">
-                                            <strong class="text-foreground">Puntos:</strong> 
-                                            <span class="text-muted-foreground">{{ question.points }}</span>
-                                        </div>
-                                        <div class="text-sm">
-                                            <strong class="text-foreground">Dependencias:</strong>
-                                            <span :class="['inline-flex px-2 py-1 text-xs font-medium rounded-full ml-1', getDependencyInfoOptimized(question).class]">
-                                                <Users v-if="question.has_answers" class="mr-1 h-3 w-3" />
-                                                {{ getDependencyInfoOptimized(question).text }}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Categoría (solo desktop) -->
-                                <div class="hidden md:block">
-                                    <span class="inline-flex px-2 py-1 text-xs font-medium bg-muted text-muted-foreground rounded-full">
-                                        {{ question.category.name }}
-                                    </span>
-                                </div>
-                                
-                                <!-- Tipo (solo desktop) -->
-                                <div class="hidden md:block">
-                                    <span class="text-sm text-foreground">{{ getTypeLabel(question.question_type) }}</span>
-                                </div>
-                                
-                                <!-- Puntos (solo desktop) -->
-                                <div class="hidden md:block">
-                                    <span class="font-medium text-foreground">{{ question.points }}</span>
-                                </div>
-                                
-                                <!-- Dependencias (solo desktop) -->
-                                <div class="hidden md:block">
-                                    <span :class="['inline-flex items-center px-2 py-1 text-xs font-medium rounded-full', getDependencyInfoOptimized(question).class]">
-                                        <Users v-if="question.has_answers" class="mr-1 h-3 w-3" />
-                                        {{ getDependencyInfoOptimized(question).text }}
-                                    </span>
-                                </div>
-                                
-                                <!-- Acciones (solo desktop) -->
-                                <div class="hidden md:block">
-                                    <div class="flex items-center justify-end gap-2">
-                                        <Button 
-                                            @click="openEditInNewTab(question.id)"
-                                            variant="ghost" 
-                                            size="sm" 
-                                            class="h-8 w-8 p-0"
-                                        >
-                                            <Edit class="h-4 w-4" />
-                                        </Button>
-                                        <button 
-                                            @click="confirmDelete(question)" 
-                                            :disabled="!getDependencyInfoOptimized(question).canDelete"
-                                            :class="[
-                                                'inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors border border-input',
-                                                !getDependencyInfoOptimized(question).canDelete
-                                                    ? 'opacity-50 cursor-not-allowed text-muted-foreground'
-                                                    : 'text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20'
-                                            ]"
-                                        >
-                                            <Trash2 class="h-4 w-4" />
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                <!-- Acciones móvil -->
-                                <div class="md:hidden mt-3 flex gap-2 flex-wrap">
-                                    <Button 
-                                        @click="openEditInNewTab(question.id)"
-                                        variant="outline" 
-                                        size="sm"
-                                    >
-                                        <Edit class="h-4 w-4 mr-1" />
-                                        Editar
-                                    </Button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div v-else class="p-8 text-center">
-                    <p class="text-muted-foreground">No se encontraron preguntas</p>
-                </div>
-            </div>
+  <Head title="Preguntas" />
+  
+  <AppLayout :breadcrumbs="breadcrumbs">
+    <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
+      <!-- Header con información de preguntas -->
+      <div class="bg-card rounded-lg p-6 shadow-sm border border-border">
+        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
+          <div class="flex-1">
+            <h1 class="text-xl sm:text-2xl font-bold mb-2 text-foreground">Preguntas</h1>
+            <p class="text-muted-foreground text-sm sm:text-base">Gestiona las preguntas de evaluación del sistema</p>
+          </div>
+          <button 
+            @click="openCreateModal"
+            class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md transition-colors font-medium"
+          >
+            <Plus class="h-4 w-4" />
+            Nueva Pregunta
+          </button>
         </div>
+        
+        <!-- Estadísticas básicas -->
+        <div class="flex gap-2 sm:gap-4 flex-wrap">
+          <div class="bg-muted px-3 sm:px-4 py-2 sm:py-3 rounded-md flex-1 sm:flex-none">
+            <span class="font-semibold text-foreground text-xs sm:text-sm">Total: {{ props.stats?.total || props.questions.length }}</span>
+          </div>
+          <div class="bg-green-50 dark:bg-green-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md flex-1 sm:flex-none">
+            <span class="font-semibold text-green-700 dark:text-green-300 text-xs sm:text-sm">Activas: {{ props.questions.filter(q => q.is_active && !q.deleted_at).length }}</span>
+          </div>
+          <div class="bg-red-50 dark:bg-red-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md flex-1 sm:flex-none">
+            <span class="font-semibold text-red-700 dark:text-red-300 text-xs sm:text-sm">Inactivas: {{ props.questions.filter(q => !q.is_active && !q.deleted_at).length }}</span>
+          </div>
+          <div class="bg-orange-50 dark:bg-orange-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md flex-1 sm:flex-none">
+            <span class="font-semibold text-orange-700 dark:text-orange-300 text-xs sm:text-sm">Eliminadas: {{ props.questions.filter(q => q.deleted_at).length }}</span>
+          </div>
+          <div class="bg-blue-50 dark:bg-blue-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md flex-1 sm:flex-none">
+            <span class="font-semibold text-blue-700 dark:text-blue-300 text-xs sm:text-sm">Con Respuestas: {{ props.questions.filter(q => q.has_answers).length }}</span>
+          </div>
+        </div>
+      </div>
 
-        <!-- Modal de confirmación de eliminación -->
-        <Transition
-            enter-active-class="transition-opacity duration-300"
-            enter-from-class="opacity-0"
-            enter-to-class="opacity-100"
-            leave-active-class="transition-opacity duration-300"
-            leave-from-class="opacity-100"
-            leave-to-class="opacity-0"
-        >
-            <div 
-                v-if="showDeleteModal" 
-                class="fixed inset-0 bg-black/50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4"
-                @click="closeDeleteModal"
+      <!-- Filtros -->
+      <div class="bg-card rounded-lg p-4 shadow-sm border border-border">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          <div class="sm:col-span-2 lg:col-span-1">
+            <label class="block text-sm font-medium text-foreground mb-1">Buscar</label>
+            <input
+              v-model="searchQuery"
+              @keyup.enter="applyFilters"
+              type="text"
+              placeholder="Buscar por pregunta..."
+              class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-foreground mb-1">Categoría</label>
+            <select
+              v-model="categoryFilter"
+              @change="applyFilters"
+              class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
             >
-                <Transition
-                    enter-active-class="transition-all duration-300"
-                    enter-from-class="opacity-0 scale-95 translate-y-4"
-                    enter-to-class="opacity-100 scale-100 translate-y-0"
-                    leave-active-class="transition-all duration-300"
-                    leave-from-class="opacity-100 scale-100 translate-y-0"
-                    leave-to-class="opacity-0 scale-95 translate-y-4"
+              <option value="">Todas</option>
+              <option v-for="category in categories" :key="category.id" :value="category.id.toString()">
+                {{ category.name }}
+              </option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-foreground mb-1">Tipo</label>
+            <select
+              v-model="typeFilter"
+              @change="applyFilters"
+              class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+            >
+              <option value="">Todos</option>
+              <option v-for="type in questionTypes" :key="type.value" :value="type.value">
+                {{ type.label }}
+              </option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-foreground mb-1">Estado</label>
+            <select
+              v-model="statusFilter"
+              @change="applyFilters"
+              class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+            >
+              <option value="">Todos</option>
+              <option value="true">Activas</option>
+              <option value="false">Inactivas</option>
+            </select>
+          </div>
+          <div class="flex items-end">
+            <label class="flex items-center">
+              <input
+                v-model="showDeleted"
+                @change="applyFilters"
+                type="checkbox"
+                class="rounded border-input text-primary shadow-sm focus:border-ring focus:ring focus:ring-ring focus:ring-opacity-50"
+              />
+              <span class="ml-2 text-sm text-foreground whitespace-nowrap">Mostrar eliminadas</span>
+            </label>
+          </div>
+          <div class="flex items-end space-x-2 sm:col-span-2 lg:col-span-1">
+            <button
+              @click="applyFilters"
+              class="flex-1 sm:flex-none px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors whitespace-nowrap"
+            >
+              Filtrar
+            </button>
+            <button
+              @click="clearFilters"
+              class="flex-1 sm:flex-none px-4 py-2 bg-muted text-muted-foreground rounded-md hover:bg-muted/80 transition-colors whitespace-nowrap"
+            >
+              Limpiar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Información de paginación con controles -->
+      <div v-if="props.questions?.data && props.questions.data.length > 0" class="bg-card rounded-lg p-4 shadow-sm border border-border">
+        <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+          <!-- Información de registros -->
+          <div class="text-muted-foreground text-sm">
+            <span>Mostrando {{ props.questions.from }} a {{ props.questions.to }} de {{ props.questions.total }} preguntas</span>
+          </div>
+          
+          <!-- Controles de paginación -->
+          <div v-if="props.questions.last_page > 1" class="flex items-center gap-2">
+            <!-- Botón anterior -->
+            <button 
+              @click="goToPreviousPage"
+              :disabled="props.questions.current_page <= 1"
+              class="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft class="h-4 w-4" />
+              Anterior
+            </button>
+            
+            <!-- Números de página -->
+            <div class="flex items-center gap-1">
+              <!-- Primera página si no está visible -->
+              <template v-if="getPageNumbers()[0] > 1">
+                <button 
+                  @click="goToPage(1)"
+                  class="inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
                 >
-                    <div 
-                        v-if="showDeleteModal"
-                        class="bg-card border border-border rounded-lg shadow-lg w-full max-w-md"
-                        @click.stop
-                    >
-                        <div class="p-6">
-                            <h3 class="text-lg font-semibold text-foreground mb-2">Confirmar eliminación</h3>
-                            <p class="text-muted-foreground mb-4">
-                                ¿Estás seguro de que deseas eliminar la pregunta "{{ questionToDelete?.question_text }}"?
-                                Esta acción no se puede deshacer.
-                            </p>
-                            <div class="flex justify-end gap-3">
-                                <Button @click="closeDeleteModal" variant="outline">
-                                    Cancelar
-                                </Button>
-                                <Button @click="deleteQuestion" variant="destructive">
-                                    Eliminar
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                </Transition>
+                  1
+                </button>
+                <span v-if="getPageNumbers()[0] > 2" class="text-muted-foreground px-1">...</span>
+              </template>
+              
+              <!-- Páginas visibles -->
+              <button 
+                v-for="page in getPageNumbers()" 
+                :key="page"
+                @click="goToPage(page)"
+                :class="[
+                  'inline-flex items-center justify-center w-8 h-8 text-sm font-medium rounded-md transition-colors',
+                  page === props.questions?.current_page 
+                    ? 'bg-primary text-primary-foreground' 
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                ]"
+              >
+                {{ page }}
+              </button>
+              
+              <!-- Última página si no está visible -->
+              <template v-if="getPageNumbers()?.length && getPageNumbers()[getPageNumbers().length - 1] < props.questions.last_page">
+                <span v-if="getPageNumbers()[getPageNumbers().length - 1] < props.questions.last_page - 1" class="text-muted-foreground px-1">...</span>
+                <button 
+                  @click="goToPage(props.questions.last_page)"
+                  class="inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                >
+                  {{ props.questions.last_page }}
+                </button>
+              </template>
             </div>
-        </Transition>
-    </AppLayout>
+            
+            <!-- Botón siguiente -->
+            <button 
+              @click="goToNextPage"
+              :disabled="props.questions.current_page >= props.questions.last_page"
+              class="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Siguiente
+              <ChevronRight class="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Información simple de total de preguntas -->
+      <div v-if="props.questions && props.questions.length > 0" class="bg-card rounded-lg p-4 shadow-sm border border-border">
+        <div class="text-muted-foreground text-sm text-center">
+          <span>Total: {{ props.questions.length }} preguntas</span>
+        </div>
+      </div>
+
+      <!-- Lista de preguntas -->
+      <div class="bg-card rounded-lg shadow-sm border border-border">
+        <div v-if="props.questions && props.questions.length > 0">
+          <!-- Encabezados - Solo visible en desktop -->
+          <div class="hidden lg:block bg-muted/30 p-4 border-b border-border">
+            <div class="grid grid-cols-12 gap-3 font-semibold text-foreground text-sm">
+              <div class="col-span-4">Pregunta</div>
+              <div class="col-span-2">Categoría</div>
+              <div class="col-span-1">Tipo</div>
+              <div class="col-span-1">Puntos</div>
+              <div class="col-span-2">Dependencias</div>
+              <div class="col-span-2 text-right">Acciones</div>
+            </div>
+          </div>
+          
+          <!-- Filas de datos -->
+          <div class="divide-y divide-border">
+            <div 
+              v-for="question in props.questions" 
+              :key="question.id"
+              :class="[
+                'p-3 sm:p-4 hover:bg-muted/50 transition-colors group',
+                { 'bg-red-50 dark:bg-red-900/10': question.deleted_at }
+              ]"
+            >
+              <!-- Layout Desktop (lg y superior) -->
+              <div class="hidden lg:grid lg:grid-cols-12 lg:gap-3 lg:items-center">
+                <!-- Pregunta -->
+                <div class="col-span-4">
+                  <div class="flex items-start gap-3">
+                    <div class="flex-shrink-0 w-7 h-7 bg-primary/10 text-primary rounded-full flex items-center justify-center text-xs font-medium">
+                      {{ question.order }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="font-medium text-foreground text-sm leading-tight">
+                        {{ truncateText(question.question_text, 60) }}
+                      </p>
+                      <div class="flex items-center gap-2 mt-1">
+                        <span :class="[
+                          'inline-flex items-center px-2 py-2 rounded-full text-xs font-medium',
+                          question.is_active 
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300'
+                            : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300'
+                        ]">
+                          <component :is="question.is_active ? Power : PowerOff" class="h-3 w-3 mr-1" />
+                          {{ question.is_active ? 'Activa' : 'Inactiva' }}
+                        </span>
+                        <span v-if="question.deleted_at" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300">
+                          <AlertTriangle class="h-3 w-3 mr-1" />
+                          Eliminada
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Categoría -->
+                <div class="col-span-2">
+                  <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
+                    {{ question.category?.name || 'Sin categoría' }}
+                  </span>
+                </div>
+
+                <!-- Tipo -->
+                <div class="col-span-1">
+                  <span class="text-xs text-muted-foreground">
+                    {{ getTypeLabel(question.question_type) }}
+                  </span>
+                </div>
+
+                <!-- Puntos -->
+                <div class="col-span-1">
+                  <span class="font-medium text-xs text-foreground">
+                    {{ question.points }} pts
+                  </span>
+                </div>
+
+                <!-- Dependencias -->
+                <div class="col-span-2">
+                  <span :class="[
+                    'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
+                    getDependencyInfo(question).class
+                  ]">
+                    {{ getDependencyInfo(question).text }}
+                  </span>
+                </div>
+
+                <!-- Acciones Desktop -->
+                <div class="col-span-2 flex justify-end items-center gap-1">
+                  <button
+                    v-if="!question.deleted_at"
+                    @click="toggleStatus(question)"
+                    :class="[
+                      'inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors border border-input',
+                      question.is_active
+                        ? 'text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20'
+                        : 'text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20'
+                    ]"
+                    :title="question.is_active ? 'Desactivar' : 'Activar'"
+                  >
+                    <component :is="question.is_active ? PowerOff : Power" class="w-4 h-4" />
+                  </button>
+
+                  <button
+                    @click="openEditModal(question)"
+                    class="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors border border-input"
+                    title="Editar"
+                  >
+                    <Edit class="w-4 h-4" />
+                  </button>
+
+                  <button 
+                    v-if="!question.deleted_at && getDependencyInfo(question).canDelete"
+                    @click="openDeleteModal(question)" 
+                    class="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors border border-input"
+                    title="Eliminar"
+                  >
+                    <Trash2 class="w-4 h-4" />
+                  </button>
+
+                  <button
+                    v-if="question.deleted_at"
+                    @click="restoreQuestion(question)"
+                    class="inline-flex items-center p-1.5 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
+                    title="Restaurar"
+                  >
+                    <RotateCcw class="w-4 h-4" />
+                  </button>
+                  
+                  <button
+                    v-if="question.deleted_at"
+                    @click="forceDeleteQuestion(question)"
+                    class="inline-flex items-center p-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                    title="Eliminar Permanente"
+                  >
+                    <Trash2 class="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+
+              <!-- Layout Móvil y Tablet (hasta lg) -->
+              <div class="lg:hidden">
+                <!-- Pregunta Principal -->
+                <div class="flex items-start gap-3 mb-3">
+                  <div class="flex-shrink-0 w-8 h-8 bg-primary/10 text-primary rounded-full flex items-center justify-center text-sm font-medium">
+                    {{ question.order }}
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="font-medium text-foreground text-sm leading-tight mb-2">
+                      {{ question.question_text }}
+                    </p>
+                    
+                    <!-- Estados -->
+                    <div class="flex flex-wrap items-center gap-2 mb-3">
+                      <span :class="[
+                        'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
+                        question.is_active 
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300'
+                          : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300'
+                      ]">
+                        <component :is="question.is_active ? Power : PowerOff" class="h-3 w-3 mr-1" />
+                        {{ question.is_active ? 'Activa' : 'Inactiva' }}
+                      </span>
+                      <span v-if="question.deleted_at" class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300">
+                        <AlertTriangle class="h-3 w-3 mr-1" />
+                        Eliminada
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Información Adicional -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+                  <div class="bg-muted/30 rounded-lg p-2">
+                    <div class="text-xs text-muted-foreground mb-1">Categoría</div>
+                    <div class="text-xs font-medium text-foreground truncate">
+                      {{ question.category?.name || 'Sin categoría' }}
+                    </div>
+                  </div>
+                  
+                  <div class="bg-muted/30 rounded-lg p-2">
+                    <div class="text-xs text-muted-foreground mb-1">Tipo</div>
+                    <div class="text-xs font-medium text-foreground">
+                      {{ getTypeLabel(question.question_type) }}
+                    </div>
+                  </div>
+                  
+                  <div class="bg-muted/30 rounded-lg p-2">
+                    <div class="text-xs text-muted-foreground mb-1">Puntos</div>
+                    <div class="text-xs font-medium text-foreground">
+                      {{ question.points }} pts
+                    </div>
+                  </div>
+                  
+                  <div class="bg-muted/30 rounded-lg p-2">
+                    <div class="text-xs text-muted-foreground mb-1">Dependencias</div>
+                    <div class="text-xs font-medium" :class="getDependencyInfo(question).class.includes('green') ? 'text-green-600' : getDependencyInfo(question).class.includes('red') ? 'text-red-600' : 'text-yellow-600'">
+                      {{ getDependencyInfo(question).text }}
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Botones de Acción Móvil -->
+                <div class="flex flex-col sm:flex-row gap-2">
+                  <button
+                    v-if="!question.deleted_at"
+                    @click="toggleStatus(question)"
+                    :class="[
+                      'flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors border border-input',
+                      question.is_active
+                        ? 'text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20'
+                        : 'text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20'
+                    ]"
+                  >
+                    <component :is="question.is_active ? PowerOff : Power" class="h-4 w-4" />
+                    {{ question.is_active ? 'Desactivar' : 'Activar' }}
+                  </button>
+
+                  <button
+                    @click="openEditModal(question)"
+                    class="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors border border-input"
+                  >
+                    <Edit class="w-4 h-4" />
+                    Editar
+                  </button>
+
+                  <button
+                    v-if="!question.deleted_at && getDependencyInfo(question).canDelete"
+                    @click="openDeleteModal(question)"
+                    class="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors border border-input"
+                  >
+                    <Trash2 class="h-4 w-4" />
+                    Eliminar
+                  </button>
+                  
+                  <button
+                    v-if="question.deleted_at"
+                    @click="restoreQuestion(question)"
+                    class="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-md transition-colors border border-input"
+                  >
+                    <RotateCcw class="h-4 w-4" />
+                    Restaurar
+                  </button>
+                  
+                  <button
+                    v-if="question.deleted_at"
+                    @click="forceDeleteQuestion(question)"
+                    class="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors border border-input"
+                  >
+                    <Trash2 class="h-4 w-4" />
+                    Eliminar Permanente
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Estado vacío -->
+        <div v-else class="p-8 text-center">
+          <div class="text-muted-foreground">
+            <FileText class="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p class="text-lg font-medium mb-2">No hay preguntas</p>
+            <p class="text-sm">Comienza creando tu primera pregunta de evaluación</p>
+          </div>
+          <button 
+            @click="openCreateModal"
+            class="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md transition-colors font-medium"
+          >
+            <Plus class="h-4 w-4" />
+            Nueva Pregunta
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+  </AppLayout>
+
+    <!-- Modales -->
+    <CreateModal 
+      v-if="showCreateModal" 
+      @close="closeModals" 
+      @created="handleCreated"
+      :categories="categories"
+    />
+    
+    <EditModal 
+      v-if="showEditModal && selectedQuestion" 
+      :question="selectedQuestion"
+      @close="closeModals" 
+      @updated="handleUpdated"
+      :categories="categories"
+    />
+    
+    <DeleteModal 
+      v-if="showDeleteModal && selectedQuestion" 
+      :question="selectedQuestion"
+      @close="closeModals" 
+      @deleted="handleDeleted"
+    />
+
 </template>

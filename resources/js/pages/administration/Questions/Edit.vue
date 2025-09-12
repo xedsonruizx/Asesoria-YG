@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted  } from 'vue';
-import { Head, router } from '@inertiajs/vue3';
-import AppLayout from '@/layouts/AppLayout.vue';
-import { Save, ArrowLeft, Plus, Minus } from 'lucide-vue-next';
+import { ref, computed, watch, onMounted } from 'vue';
+import { router } from '@inertiajs/vue3';
+import { Save, X } from 'lucide-vue-next';
 import { useForm } from '@inertiajs/vue3';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { type BreadcrumbItem } from '@/types';
+import { Teleport } from 'vue';
 import QuestionDependency from '@/components/QuestionDependency.vue';
 import MultaAssignment from '@/components/MultaAssignment.vue';
 import QuestionTypeInputs from '@/components/MyComponents/QuestionInputs/QuestionTypeInputs.vue';
@@ -70,17 +69,31 @@ interface Category {
     slug: string;
 }
 
+interface Multa {
+    id: number;
+    name: string;
+    description?: string;
+}
+
 interface Props {
     question: Question;
     categories: Category[];
     availableQuestions?: Question[];
+    multas?: Multa[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
-    availableQuestions: () => []
+    availableQuestions: () => [],
+    multas: () => []
 });
 
-// Variable reactiva para manejar dependencias - CORREGIR ESTA LÍNEA
+// Emits
+const emit = defineEmits<{
+  close: [];
+  updated: [];
+}>();
+
+const isOpen = ref(true);
 const hasDependency = ref(false);
 const hasMultaAssignment = ref(false);
 
@@ -134,73 +147,44 @@ const form = useForm<QuestionForm>({
         operator: 'equals',
         value: ''
     },
+    multa_condition: props.question.multa_condition || {
+        multa_id: null,
+        trigger_condition: 'always',
+        trigger_value: null
+    },
     validation_rules: props.question.validation_rules,
     is_required: props.question.is_required,
     is_active: props.question.is_active
 });
 
-// Verificar y actualizar hasDependency después de inicializar el form
-console.log('Debug - Question data:', {
-    show_condition: props.question.show_condition,
-    form_show_condition: form.show_condition,
-    parent_question_id: form.show_condition?.parent_question_id
-});
-
-// DEBUG: Agregar console.log temporal para verificar los datos
-console.log('Question data:', {
-  show_condition: props.question.show_condition,
-  parent_question_id: props.question.show_condition?.parent_question_id,
-  hasDependency: hasDependency.value
-});
-
-
-
-
 // Establecer hasDependency basándose en el form inicializado
-if (form.show_condition?.parent_question_id && 
-    form.show_condition.parent_question_id !== null && 
-    form.show_condition.parent_question_id !== undefined) {
+if (form.show_condition?.parent_question_id) {
     hasDependency.value = true;
-    console.log('Debug - Setting hasDependency to true');
-} else {
-    console.log('Debug - hasDependency remains false');
+    console.log('Dependency detected:', form.show_condition);
 }
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Preguntas', href: '/admin/questions' },
-    { title: 'Editar Pregunta', current: true },
-];
 
-// Computed properties como en Create.vue
-// const showOptions = computed(() => {
-//     return ['select', 'radio' , 'checkbox'].includes(form.question_type);
-// });
+// Inicializar hasMultaAssignment basado en los datos existentes
+if (props.question.multa_condition?.multa_id) {
+    hasMultaAssignment.value = true;
+}
 
-// const showMinMax = computed(() => {
-//     return form.question_type === 'number';
-// });
-
-// const showPlaceholder = computed(() => {
-//     return ['text', 'textarea', 'number'].includes(form.question_type);
-// });
-
-// Agregar computed para mostrar campo de puntos
+// Computed properties
 const showPoints = computed(() => {
-    // No mostrar puntos para tipos que tienen puntos individuales por opción
     return !['select', 'radio', 'checkbox'].includes(form.question_type);
 });
 
-// Remover las funciones addOption y removeOption ya que están en los componentes
+const close = () => {
+    isOpen.value = false;
+    emit('close');
+};
 
 const submitForm = () => {
     form.put(`/admin/questions/${props.question.id}`, {
         onSuccess: () => {
-            router.visit('/admin/questions');
+            emit('updated');
+            close();
         }
     });
-};
-
-const goBack = () => {
-    router.visit('/admin/questions');
 };
 
 const availableQuestions = ref<Question[]>(props.availableQuestions || []);
@@ -241,7 +225,7 @@ watch(() => form.category_id, (newCategoryId) => {
   }
   // Limpiar la pregunta padre seleccionada al cambiar categoría
   if (form.show_condition?.parent_question_id) {
-    form.show_condition.parent_question_id = undefined;
+    form.show_condition.parent_question_id = null;
   }
 });
 
@@ -262,276 +246,245 @@ watch(hasDependency, (newValue) => {
 
 // Cargar preguntas al montar el componente si ya hay dependencia
 onMounted(() => {
-  console.log('Mounting Edit component', {
-    hasDependency: hasDependency.value,
-    categoryId: form.category_id,
-    showCondition: form.show_condition,
-    originalQuestion: props.question
-  });
-  
   if (hasDependency.value && form.category_id) {
     loadQuestionsByCategory(form.category_id);
   }
 });
-
-
-// DEBUG: Agregar console.log temporal para verificar los datos
-console.log('Question data:', {
-  show_condition: props.question.show_condition,
-  parent_question_id: props.question.show_condition?.parent_question_id,
-  hasDependency: hasDependency.value
-});
-
 
 // Agregar función para actualizar puntos totales
 const updateTotalPoints = (totalPoints: number) => {
   form.points = totalPoints;
 };
 
-// Watcher para resetear puntos cuando cambia el tipo de pregunta
-watch(() => form.question_type, () => {
-  if (!['select', 'radio', 'checkbox'].includes(form.question_type)) {
-    form.points = 1;
-  }
-});
-// Inicializar hasMultaAssignment basado en los datos existentes
-onMounted(() => {
-    if (props.question.show_condition?.parent_question_id) {
-        hasDependency.value = true;
+// Watcher para resetear opciones cuando cambia el tipo de pregunta
+watch(() => form.question_type, (newType, oldType) => {
+  if (newType !== oldType) {
+    // Resetear opciones para tipos que no las necesitan
+    if (!['select', 'radio', 'checkbox'].includes(newType)) {
+      form.options = [];
     }
     
-    // Verificar si la pregunta tiene asignación de multa
-    if (props.question.multa_condition?.multa_id) {
-        hasMultaAssignment.value = true;
+    // Limpiar placeholder para tipos que no lo necesitan
+    if (!['text', 'textarea', 'number'].includes(newType)) {
+      form.placeholder = '';
     }
+    
+    // Resetear min_value y max_value para tipos que no son number
+    if (newType !== 'number') {
+      form.min_value = undefined;
+      form.max_value = undefined;
+    }
+    
+    // Ajustar puntos según el tipo
+    if (['select', 'radio', 'checkbox'].includes(newType)) {
+      // Para tipos con opciones, los puntos se calculan automáticamente
+      form.points = 0;
+    } else {
+      // Para otros tipos, establecer puntos por defecto
+      form.points = 1;
+    }
+  }
 });
 </script>
 
 <template>
-    <Head title="Editar Pregunta" />
-
-    <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="space-y-6 p-6">
-            <!-- Header -->
-            <div class="bg-card rounded-lg p-6 shadow-sm border border-border">
-                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
-                    <div class="flex-1">
-                        <h1 class="text-xl sm:text-2xl font-bold mb-2 text-foreground">Editar Pregunta</h1>
-                        <p class="text-muted-foreground text-sm sm:text-base">Modifica los campos de la pregunta de evaluación</p>
-                    </div>
-                    <Button @click="goBack" variant="outline" class="inline-flex items-center gap-2">
-                        <ArrowLeft class="h-4 w-4" />
-                        Volver
-                    </Button>
-                </div>
-            </div>
-
-            <!-- Formulario -->
-            <div class="bg-card rounded-lg shadow-sm border border-border">
-                <div class="p-6">
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <!-- Formulario principal -->
-                        <div class="lg:col-span-2">
-                            <form @submit.prevent="submitForm" class="space-y-6">
-                                <!-- Categoría -->
-                                <div>
-                                    <Label for="category_id">Categoría *</Label>
-                                    <select 
-                                        disabled
-                                        id="category_id"
-                                        v-model="form.category_id"
-                                        class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                                        required
-                                    >
-                                        <option value="">Seleccionar categoría</option>
-                                        <option v-for="category in categories" :key="category.id" :value="category.id" >
-                                            {{ category.name }}
-                                        </option>
-                                    </select>
-                                    <InputError :message="form.errors.category_id" />
-                                </div>
-
-                                <!-- Texto de la pregunta -->
-                                <div>
-                                    <Label for="question_text">Texto de la Pregunta *</Label>
-                                    <textarea 
-                                        id="question_text"
-                                        v-model="form.question_text"
-                                        rows="3"
-                                        class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                                        placeholder="Escribe el texto de la pregunta..."
-                                        required
-                                    ></textarea>
-                                    <InputError :message="form.errors.question_text" />
-                                </div>
-
-                                <!-- Tipo de pregunta -->
-                                <div>
-                                    <Label for="question_type">Tipo de Pregunta *</Label>
-                                    <select 
-                                        id="question_type"
-                                        v-model="form.question_type"
-                                        class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                                        required
-                                    >
-                                        <option value="text">Texto</option>
-                                        <option value="textarea">Texto largo</option>
-                                        <option value="select">Selección (dropdown)</option>
-                                        <option value="radio">Selección única (radio buttons)</option>
-                                        <option value="number">Número</option>
-                                        <option value="checkbox">Selección múltiple (checkboxes)</option>
-                                    </select>
-                                    <InputError :message="form.errors.question_type" />
-                                </div>
-
-                              
-
-                                <!-- Campos específicos del tipo de pregunta -->
-                                <QuestionTypeInputs
-                                    :question-type="form.question_type"
-                                    :placeholder="form.placeholder"
-                                    :options="form.options"
-                                    :min-value="form.min_value"
-                                    :max-value="form.max_value"
-                                    @update:placeholder="form.placeholder = $event"
-                                    @update:options="form.options = $event"
-                                    @update:min-value="form.min_value = $event"
-                                    @update:max-value="form.max_value = $event"
-                                    @update:totalPoints="updateTotalPoints"
-                                    :errors="form.errors"
-                                />
-
-                                <!-- Puntos y orden -->
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div v-if="showPoints">
-                                        <Label for="points">Puntos *</Label>
-                                        <Input 
-                                            id="points"
-                                            v-model.number="form.points"
-                                            type="number"
-                                            min="0"
-                                            max="100"
-                                            required
-                                        />
-                                        <InputError :message="form.errors.points" />
-                                    </div>
-                                    <div :class="showPoints ? '' : 'col-span-2'">
-                                        <Label>Orden en la Categoría</Label>
-                                        <div class="px-3 py-2 bg-muted border border-border rounded-md text-sm text-muted-foreground">
-                                            Posición {{ form.order }} en {{ question.category?.name }}
-                                        </div>
-                                        <p class="text-xs text-muted-foreground mt-1">El orden se asigna automáticamente según la categoría</p>
-                                    </div>
-                                </div>
-
-                                <!-- Orden -->
-                                <div>
-                                    <Label for="order">Orden *</Label>
-                                    <Input 
-                                        id="order"
-                                        v-model.number="form.order"
-                                        type="number"
-                                        min="1"
-                                        required
-                                    />
-                                    <InputError :message="form.errors.order" />
-                                    <p class="text-sm text-muted-foreground mt-1">
-                                        El orden debe ser único dentro de la categoría seleccionada
-                                    </p>
-                                </div>
-
-
-
-                                <!-- Dependencias de pregunta -->
-                                <QuestionDependency
-                                    v-model="hasDependency"
-                                    v-model:show-condition="form.show_condition"
-                                    :category-id="form.category_id"
-                                    :exclude-question-id="question.id"
-                                    :errors="form.errors"
-                                />
-
-                                <!-- Asignación de multas -->
-                                <MultaAssignment
-                                    v-model="hasMultaAssignment"
-                                    v-model:multa-condition="form.multa_condition"
-                                    :errors="form.errors"
-                                />
-
-                                <!-- Checkboxes -->
-                                <div class="space-y-4">
-                                    <div class="flex items-center space-x-2">
-                                        <input 
-                                            id="is_required"
-                                            v-model="form.is_required"
-                                            type="checkbox"
-                                            class="rounded border-input text-primary focus:ring-ring"
-                                        />
-                                        <Label for="is_required">Pregunta obligatoria</Label>
-                                    </div>
-                                    
-                                    <!-- <div class="flex items-center space-x-2">
-                                        <input 
-                                            id="is_active"
-                                            v-model="form.is_active"
-                                            type="checkbox"
-                                            class="rounded border-input text-primary focus:ring-ring"
-                                        />
-                                        <Label for="is_active">Pregunta activa</Label>
-                                    </div> -->
-                                </div>
-
-                                <!-- Botones -->
-                                <div class="flex justify-end gap-3 pt-6">
-                                    <Button @click="goBack" type="button" variant="outline">
-                                        Cancelar
-                                    </Button>
-                                    <Button type="submit" :disabled="form.processing">
-                                        <Save class="h-4 w-4 mr-2" />
-                                        {{ form.processing ? 'Guardando...' : 'Guardar Cambios' }}
-                                    </Button>
-                                </div>
-                            </form>
-                        </div>
-
-                        <!-- Sidebar con información -->
-                        <div class="lg:col-span-1">
-                            <div class="bg-muted rounded-lg p-4">
-                                <h3 class="font-medium text-foreground mb-4">Tipos de Pregunta</h3>
-                                <div class="space-y-3 text-sm">
-                                    <div>
-                                        <strong>Texto:</strong> Campo de texto simple
-                                    </div>
-                                    <div>
-                                        <strong>Texto largo:</strong> Área de texto para respuestas extensas
-                                    </div>
-                                    <div>
-                                        <strong>Selección:</strong> Lista desplegable con opciones
-                                    </div>
-                                    <div>
-                                        <strong>Número:</strong> Campo numérico con validación
-                                    </div>
-                                    <div>
-                                        <strong>Casillas:</strong> Múltiples opciones seleccionables
-                                    </div>
-                                    <div>
-                                        <strong>Sí/No:</strong> Pregunta de respuesta binaria
-                                    </div>
-                                </div>
-                                
-                                <div class="mt-6">
-                                    <h4 class="font-medium text-foreground mb-2">Campo Orden</h4>
-                                    <p class="text-sm text-muted-foreground">
-                                        Define la secuencia en que aparecen las preguntas. Número menor = aparece primero.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+  <Teleport to="body">
+    <div 
+      v-if="isOpen" 
+      class="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm overflow-y-auto"
+      @click="close"
+    >
+      <!-- Modal Container - Responsive -->
+      <div 
+        class="relative w-full max-w-sm sm:max-w-2xl md:max-w-4xl lg:max-w-6xl xl:max-w-7xl min-h-[90vh] sm:min-h-0 sm:max-h-[95vh] bg-background rounded-none sm:rounded-lg shadow-2xl border-0 sm:border overflow-hidden mt-0 sm:mt-4"
+        @click.stop
+      >
+        <!-- Header -->
+        <div class="flex items-center justify-between p-4 sm:p-6 border-b bg-muted/30 sticky top-0 z-10">
+          <h2 class="text-lg sm:text-xl font-semibold text-foreground">Editar Pregunta</h2>
+          <button 
+            @click="close" 
+            class="p-2 hover:bg-muted rounded-md transition-colors"
+          >
+            <X class="w-4 h-4" />
+          </button>
         </div>
-    </AppLayout>
+        
+        <!-- Content - Responsive Layout -->
+        <div class="flex flex-col lg:flex-row h-[calc(90vh-64px)] sm:h-[calc(95vh-80px)]">
+          <!-- Main Form Area -->
+          <div class="flex-1 p-4 sm:p-6 overflow-y-auto">
+            <form @submit.prevent="submitForm" class="space-y-4 sm:space-y-6">
+              <!-- Grid responsive -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                <!-- Categoría -->
+                <div class="space-y-2 md:col-span-2 lg:col-span-1">
+                  <Label for="category">Categoría *</Label>
+                  <select
+                    id="category"
+                    v-model="form.category_id"
+                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    required
+                  >
+                    <option v-for="category in categories" :key="category.id" :value="category.id">
+                      {{ category.name }}
+                    </option>
+                  </select>
+                  <InputError :message="form.errors.category_id" />
+                </div>
+
+                <!-- Texto de la Pregunta -->
+                <div class="space-y-2 md:col-span-2">
+                  <Label for="question_text">Texto de la Pregunta *</Label>
+                  <textarea
+                    id="question_text"
+                    v-model="form.question_text"
+                    rows="3"
+                    class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    placeholder="Escribe el texto de la pregunta..."
+                    required
+                  ></textarea>
+                  <InputError :message="form.errors.question_text" />
+                </div>
+
+                <!-- Tipo de Pregunta -->
+                <div class="space-y-2">
+                  <Label for="question_type">Tipo de Pregunta *</Label>
+                  <select
+                    id="question_type"
+                    v-model="form.question_type"
+                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    required
+                  >
+                    <option value="text">Texto</option>
+                    <option value="textarea">Texto largo</option>
+                    <option value="select">Selección</option>
+                    <option value="radio">Radio</option>
+                    <option value="number">Número</option>
+                    <option value="checkbox">Casillas</option>
+                  </select>
+                  <InputError :message="form.errors.question_type" />
+                </div>
+
+                <!-- Puntos -->
+                <div v-if="showPoints" class="space-y-2">
+                  <Label for="points">Puntos *</Label>
+                  <Input
+                    id="points"
+                    v-model.number="form.points"
+                    type="number"
+                    min="0"
+                    required
+                  />
+                  <InputError :message="form.errors.points" />
+                </div>
+
+                <!-- Puntos automáticos para tipos con opciones -->
+                <div v-else class="space-y-2">
+                  <Label>Puntos (Calculados automáticamente)</Label>
+                  <div class="text-sm text-muted-foreground bg-muted p-2 rounded">
+                    Total de puntos: {{ form.points }}
+                  </div>
+                </div>
+
+                <!-- Orden -->
+                <div class="space-y-2">
+                  <Label for="order">Orden *</Label>
+                  <Input
+                    id="order"
+                    v-model.number="form.order"
+                    type="number"
+                    min="1"
+                    required
+                  />
+                  <InputError :message="form.errors.order" />
+                </div>
+              </div>
+
+              <!-- Componentes adicionales -->
+              <div class="space-y-4 sm:space-y-6">
+                <QuestionTypeInputs
+                  :question-type="form.question_type"
+                  :placeholder="form.placeholder"
+                  :options="form.options"
+                  :min-value="form.min_value"
+                  :max-value="form.max_value"
+                  @update:placeholder="form.placeholder = $event"
+                  @update:options="form.options = $event"
+                  @update:min-value="form.min_value = $event"
+                  @update:max-value="form.max_value = $event"
+                  @update:totalPoints="updateTotalPoints"
+                  :errors="form.errors"
+                />
+                
+                <!-- Dependencias de Pregunta -->
+                <div class="space-y-4">
+                  <QuestionDependency 
+                    v-model="hasDependency"
+                    :show-condition="form.show_condition"
+                    @update:show-condition="form.show_condition = $event"
+                    :category-id="form.category_id"
+                    :exclude-question-id="question.id"
+                    :errors="form.errors"
+                  />
+                </div>
+                
+                <!-- Asignación de Multas -->
+                <div class="space-y-4">
+                  <MultaAssignment 
+                    v-if="props.multas && props.multas.length > 0"
+                    v-model="hasMultaAssignment"
+                    :multas="props.multas"
+                    :multa-condition="form.multa_condition"
+                    @update:multa-condition="form.multa_condition = $event"
+                    :errors="form.errors"
+                  />
+                </div>
+              </div>
+              
+              <!-- Botones - Sticky en móvil -->
+              <div class="sticky bottom-0 bg-background border-t pt-4 mt-6 flex flex-col sm:flex-row justify-end gap-3">
+                <Button type="button" variant="outline" @click="close" class="w-full sm:w-auto">
+                  Cancelar
+                </Button>
+                <Button type="submit" :disabled="form.processing" class="w-full sm:w-auto">
+                  <Save class="w-4 h-4 mr-2" />
+                  {{ form.processing ? 'Guardando...' : 'Guardar Cambios' }}
+                </Button>
+              </div>
+            </form>
+          </div>
+          
+          <!-- Sidebar - Oculto en móvil, visible en desktop -->
+          <div class="hidden lg:block w-80 border-l bg-muted/20 p-6 overflow-y-auto">
+            <div class="space-y-4">
+              <h3 class="font-semibold text-foreground">Tipos de Pregunta</h3>
+              <div class="space-y-3 text-sm">
+                <div class="p-3 bg-background rounded-md">
+                  <strong>Texto:</strong> Campo de texto simple
+                </div>
+                <div class="p-3 bg-background rounded-md">
+                  <strong>Texto largo:</strong> Área de texto para respuestas extensas
+                </div>
+                <div class="p-3 bg-background rounded-md">
+                  <strong>Selección:</strong> Lista desplegable con opciones
+                </div>
+                <div class="p-3 bg-background rounded-md">
+                  <strong>Radio:</strong> Selección única con opciones personalizables
+                </div>
+                <div class="p-3 bg-background rounded-md">
+                  <strong>Número:</strong> Campo numérico con validación
+                </div>
+                <div class="p-3 bg-background rounded-md">
+                  <strong>Casillas:</strong> Múltiples opciones seleccionables
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 

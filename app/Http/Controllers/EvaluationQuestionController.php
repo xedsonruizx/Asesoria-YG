@@ -51,8 +51,18 @@ class EvaluationQuestionController extends Controller
 
         // Agregar información de dependencias a cada pregunta
         $questions = $questions->map(function ($question) {
+            // Validar que la pregunta no sea null
+            if (!$question) {
+                return null;
+            }
+            
             $question->has_answers = $question->answers()->exists();
             $question->answers_count = $question->answers()->count();
+            
+            // Asegurar que is_active tenga un valor por defecto
+            if (!isset($question->is_active)) {
+                $question->is_active = true;
+            }
             
             // Asegurar que show_condition sea un array con la nueva estructura
             if ($question->show_condition && is_string($question->show_condition)) {
@@ -67,7 +77,7 @@ class EvaluationQuestionController extends Controller
             }
             
             return $question;
-        });
+        })->filter(); // Eliminar elementos null
 
         // Obtener estadísticas
         $stats = [

@@ -1,7 +1,7 @@
 <template>
   <div>
     <Label>Opciones con Puntos *</Label>
-    <div class="space-y-3">
+    <div class="space-y-3 mt-2">
       <RadioOptionForm
         v-for="(option, index) in options"
         :key="index"
