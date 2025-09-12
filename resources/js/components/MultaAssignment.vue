@@ -49,12 +49,19 @@ const condition = computed({
 });
 
 // Computed para las opciones de condición de activación
-const availableTriggerConditions = computed(() => [
-  { value: 'always', label: 'Siempre aplicar' },
-  { value: 'on_fail', label: 'Al fallar la pregunta' },
-  { value: 'on_specific_answer', label: 'Con respuesta específica' },
-  { value: 'on_low_score', label: 'Con puntuación baja' }
-]);
+const availableTriggerConditions = computed(() => {
+  const baseConditions = [
+    { value: 'equals', label: 'Es igual a' },
+    { value: 'not_equals', label: 'No es igual a' },
+    { value: 'contains', label: 'Contiene' },
+    { value: 'greater_than', label: 'Mayor que' },
+    { value: 'less_than', label: 'Menor que' },
+    { value: 'is_empty', label: 'Cuando está vacío' },
+    { value: 'is_not_empty', label: 'Cuando está rellenado' }
+  ];
+  
+  return baseConditions;
+});
 
 // Función para cargar multas disponibles
 const loadAvailableMultas = async () => {
@@ -203,7 +210,7 @@ watch(() => props.multaCondition?.multa_id, (newMultaId) => {
         <Label for="trigger_condition">Condición de activación</Label>
         <select 
           id="trigger_condition"
-          :value="multaCondition.trigger_condition || 'always'"
+          :value="multaCondition.trigger_condition || 'equals'"
           @input="updateTriggerCondition(($event.target as HTMLSelectElement).value)"
           class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         >
@@ -218,13 +225,13 @@ watch(() => props.multaCondition?.multa_id, (newMultaId) => {
         <InputError :message="errors['multa_condition.trigger_condition']" />
       </div>
       
-      <div v-if="['on_specific_answer', 'on_low_score'].includes(multaCondition.trigger_condition || 'always')">
+      <div v-if="!['is_empty', 'is_not_empty'].includes(multaCondition.trigger_condition || 'equals')">
         <Label for="trigger_value">Valor de activación</Label>
         <Input 
           id="trigger_value"
           :model-value="multaCondition.trigger_value || ''"
           @update:model-value="updateTriggerValue"
-          :placeholder="multaCondition.trigger_condition === 'on_low_score' ? 'Puntuación mínima (ej: 5)' : 'Respuesta específica'"
+          :placeholder="multaCondition.trigger_condition === 'less_than' || multaCondition.trigger_condition === 'greater_than' ? 'Valor numérico (ej: 5)' : 'Valor esperado'"
         />
         <InputError :message="errors['multa_condition.trigger_value']" />
       </div>
