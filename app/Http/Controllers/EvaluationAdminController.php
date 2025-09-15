@@ -253,21 +253,20 @@ class EvaluationAdminController extends Controller
         $companyName = config('app.company_name', 'Asesorías YG');
         
         // Agrupar preguntas y respuestas por categoría con puntos obtenidos
-        // En el método generatePDF, modificar la consulta para incluir preguntas eliminadas
+        // Cambiar la lógica para usar las respuestas directamente de la evaluación
         $questionsByCategory = [];
-        foreach ($report['questions'] as $item) {
-            // Usar withTrashed() para incluir preguntas eliminadas en reportes
-            $question = EvaluationQuestion::withTrashed()->find($item['question_id']);
-            if ($question) {
-                $answer = EvaluationAnswer::where('evaluation_id', $evaluation->id)
-                    ->where('question_id', $item['question_id'])
-                    ->first();
-                
+        
+        // Obtener todas las respuestas con sus preguntas y categorías
+        $answers = $evaluation->answers()->with(['question.category'])->get();
+        
+        foreach ($answers as $answer) {
+            $question = $answer->question;
+            if ($question && $question->category) {
                 $questionsByCategory[$question->category->name][] = [
                     'question' => $question->question_text,
-                    'answer' => $item['answer'] ?? 'Sin respuesta',
+                    'answer' => $answer->answer_value ?? 'Sin respuesta',
                     'points' => $answer->points_earned ?? 0,
-                    'question_type' => $answer->question->question_type
+                    'question_type' => $question->question_type
                 ];
             }
         }

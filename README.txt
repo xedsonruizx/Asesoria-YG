@@ -83,4 +83,4 @@ tasklist /FI "PID eq 8680"
 
 Si confirmas que es otro MySQL/MariaDB, elimínalo:
 
-taskkill /PID 8680 /F
+taskkill /PID 8528 /F
