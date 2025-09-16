@@ -154,13 +154,13 @@ class EvaluationCategoryController extends Controller
         try {
             // Verificar si tiene preguntas asociadas
             if ($evaluationCategory->allQuestions()->count() > 0) {
-                return redirect()->route('evaluation-categories.index')
+                return redirect()->route('question-categories.index')
                                ->with('error', 'No se puede eliminar la categoría porque tiene preguntas asociadas.');
             }
 
             $evaluationCategory->delete(); // Soft delete
 
-            return redirect()->route('evaluation-categories.index')
+            return redirect()->route('question-categories.index')
                            ->with('success', 'Categoría eliminada exitosamente.');
         } catch (\Exception $e) {
             Log::error('Error al eliminar categoría: ' . $e->getMessage());
@@ -177,7 +177,7 @@ class EvaluationCategoryController extends Controller
             $category = EvaluationCategory::onlyTrashed()->findOrFail($id);
             $category->restore();
 
-            return redirect()->route('evaluation-categories.index')
+            return redirect()->route('question-categories.index')
                            ->with('success', 'Categoría restaurada exitosamente.');
         } catch (\Exception $e) {
             Log::error('Error al restaurar categoría: ' . $e->getMessage());
@@ -194,7 +194,7 @@ class EvaluationCategoryController extends Controller
             $category = EvaluationCategory::onlyTrashed()->findOrFail($id);
             $category->forceDelete();
 
-            return redirect()->route('evaluation-categories.index')
+            return redirect()->route('question-categories.index')
                            ->with('success', 'Categoría eliminada permanentemente.');
         } catch (\Exception $e) {
             Log::error('Error al eliminar permanentemente categoría: ' . $e->getMessage());
@@ -205,18 +205,37 @@ class EvaluationCategoryController extends Controller
     /**
      * Toggle status of category
      */
-    public function toggleStatus(EvaluationCategory $evaluationCategory)
+    public function toggleStatus($id)
     {
+        $category = EvaluationCategory::findOrFail($id);
+        
         try {
-            $evaluationCategory->update([
-                'is_active' => !$evaluationCategory->is_active
+            // Debug: Log antes de la actualización
+            Log::info('Intentando actualizar estado de categoría', [
+                'category_id' => $category->id,
+                'from_status' => $category->is_active,
+                'to_status' => !$category->is_active
             ]);
 
-            $status = $evaluationCategory->is_active ? 'activada' : 'desactivada';
-            return redirect()->route('evaluation-categories.index')
+            $category->update([
+                'is_active' => !$category->is_active
+            ]);
+
+            // Debug: Log después de la actualización
+            $category->refresh();
+            Log::info('Estado actualizado exitosamente', [
+                'category_id' => $category->id,
+                'updated_status' => $category->is_active
+            ]);
+    
+            $status = $category->is_active ? 'activada' : 'desactivada';
+            
+        
+            
+            return redirect()->route('question-categories.index')
                            ->with('success', "Categoría {$status} exitosamente.");
         } catch (\Exception $e) {
-            Log::error('Error al cambiar estado de categoría: ' . $e->getMessage());
+ 
             return back()->withErrors(['error' => 'Error al cambiar el estado de la categoría.']);
         }
     }

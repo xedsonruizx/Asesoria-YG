@@ -19,6 +19,39 @@ class PostController extends Controller
      * Display a listing of the resource.
      * Vista de clientes publicaciones
      */
+  public function index(Request $request)
+    {
+        $query = Post::with('tags')
+            ->where('status', 'published')
+            ->where('is_active', true);
+
+        // Filtrar por tags si se proporciona
+        if ($request->filled('tag_id')) {
+            $query->withTags([$request->tag_id]);
+        }
+
+        // Búsqueda por título
+        if ($request->filled('search')) {
+            $query->where('title', 'like', '%' . $request->search . '%');
+        }
+
+        $posts = $query->orderBy('published_at', 'desc')->paginate(12);
+        $tags = TagCategory::active()->orderBy('name')->get();
+
+        return Inertia::render('ClientMenu/Post', [
+            'posts' => $posts,
+            'tags' => $tags,
+            'filters' => $request->only(['tag_id', 'search'])
+        ]);
+    }
+
+
+
+
+
+
+
+
     public function AdminIndex(Request $request)
     {
         $query = Post::with('tags');

@@ -64,10 +64,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('api/post-categories', [TagCategoryController::class, 'apiIndex'])->name('api.post-categories.index');
 
         // Resource para categorías de evaluación
-        Route::resource('question-categories', EvaluationCategoryController::class);
-        Route::patch('question-categories/{category}/toggle-status', [EvaluationCategoryController::class, 'toggleStatus'])->name('question-categories.toggle-status');
+        // MOVER las rutas específicas ANTES del Route::resource
+        Route::patch('question-categories/{id}/toggle-status', [EvaluationCategoryController::class, 'toggleStatus'])->name('question-categories.toggle-status');
         Route::patch('question-categories/{id}/restore', [EvaluationCategoryController::class, 'restore'])->name('question-categories.restore');
         Route::delete('question-categories/{id}/force-delete', [EvaluationCategoryController::class, 'forceDelete'])->name('question-categories.force-delete');
+        Route::resource('question-categories', EvaluationCategoryController::class);
         Route::get('api/question-categories', [EvaluationCategoryController::class, 'apiIndex'])->name('api.question-categories.index');
 
         // Rutas administrativas para evaluaciones
@@ -87,12 +88,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/evaluations/{id}/pdf', [EvaluationAdminController::class, 'generatePdf'])->name('admin.evaluations.pdf');
     
         // Rutas específicas ANTES del resource route
-        Route::get('admin/questions/next-order', [EvaluationQuestionController::class, 'getNextOrder'])
-            ->name('admin.questions.next-order');
-        Route::get('admin/questions/by-category', [EvaluationQuestionController::class, 'getQuestionsByCategory'])
-            ->name('admin.questions.by-category');
-        Route::patch('admin/questions/{question}/toggle-status', [EvaluationQuestionController::class, 'toggleStatus'])
-            ->name('admin.questions.toggle-status');
+        Route::get('admin/questions/next-order', [EvaluationQuestionController::class, 'getNextOrder'])->name('admin.questions.next-order');
+        Route::get('admin/questions/by-category', [EvaluationQuestionController::class, 'getQuestionsByCategory'])->name('admin.questions.by-category');
+        Route::patch('admin/questions/{question}/toggle-status', [EvaluationQuestionController::class, 'toggleStatus'])->name('admin.questions.toggle-status');
         
         // Resource route DESPUÉS de las rutas específicas
         Route::resource('admin/questions', EvaluationQuestionController::class)->names([

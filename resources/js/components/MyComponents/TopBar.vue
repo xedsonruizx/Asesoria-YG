@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { getInitials } from '@/composables/useInitials';
 import { router } from '@inertiajs/vue3';
 import MobileMenu from '@/components/MyComponents/MobileMenu.vue';
-
+import { dashboard } from '@/routes';
 
 
 
@@ -113,7 +113,7 @@ onUnmounted(() => {
                     <!-- Dashboard link - solo visible para usuarios con permisos de manage -->
                     <Link 
                         v-if="canManage"
-                        href="/admin/dashboard" 
+                        href="/dashboard" 
                         :class="addActiveClasses('text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium dark:text-gray-300 dark:hover:text-white', '/admin')"
                     >
                         Dashboard

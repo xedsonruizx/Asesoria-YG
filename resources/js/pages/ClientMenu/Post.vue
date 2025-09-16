@@ -39,7 +39,14 @@ interface User {
 }
 
 interface Props {
-    posts: Post[];
+    posts: {
+        data: Post[];
+        current_page: number;
+        last_page: number;
+        per_page: number;
+        total: number;
+        // Add other pagination properties as needed
+    } | Post[];
     auth?: {
         user: User;
     };
@@ -64,7 +71,11 @@ const userIsPremium = computed(() => {
 
 // Computed para filtrar posts publicados (ya vienen filtrados del servidor)
 const publishedPosts = computed(() => {
-    return props.posts;
+    // Handle both paginated and array formats
+    if (Array.isArray(props.posts)) {
+        return props.posts;
+    }
+    return props.posts?.data || [];
 });
 
 // Función para cerrar el modal

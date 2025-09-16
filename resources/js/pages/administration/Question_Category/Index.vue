@@ -5,7 +5,8 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import CreateModal from './Create.vue';
 import EditModal from './Edit.vue';
 import DeleteModal from './Delete.vue';
-import { Plus, Edit, Trash2, Eye, ChevronLeft, ChevronRight, BookOpen, FileText, Calendar, ArrowLeft } from 'lucide-vue-next';
+// import { 'question-categories.toggle-status' as toggleStatusRoute } from '@/routes/web';
+import { Plus, Edit, Trash2, Eye, ChevronLeft, ChevronRight, BookOpen, FileText, Calendar, ArrowLeft, Power, PowerOff } from 'lucide-vue-next';
 import { type BreadcrumbItem } from '@/types';
 
 // Props del backend
@@ -174,6 +175,21 @@ const truncateText = (text: string, maxLength: number) => {
   if (text.length <= maxLength) return text;
   return text.substring(0, maxLength) + '...';
 };
+
+// Función para cambiar el estado activo/inactivo
+const toggleStatus = (category: EvaluationCategory) => {
+  console.log(category.id)
+  router.patch(`/question-categories/${category.id}/toggle-status`, {}, {
+    preserveState: true,
+    preserveScroll: true,
+    onSuccess: () => {
+      console.log('Estado cambiado exitosamente');
+    },
+    onError: (errors) => {
+      console.error('Error al cambiar el estado:', errors);
+    }
+  });
+};
 </script>
 
 <template>
@@ -292,12 +308,12 @@ const truncateText = (text: string, maxLength: number) => {
         <div v-if="props.categories?.data && props.categories.data.length > 0">
           <!-- Encabezados -->
           <div class="bg-muted/30 p-4 border-b border-border">
-            <div class="grid grid-cols-1 md:grid-cols-7 gap-4 font-semibold text-foreground">
+            <div class="grid grid-cols-1 md:grid-cols-8 gap-4 font-semibold text-foreground">
               <div class="md:col-span-2">Categoría</div>
               <div class="md:col-span-2">Descripción</div>
               <div class="hidden md:block">Preguntas</div>
               <div class="hidden md:block">Estado</div>
-              <div class="hidden md:block text-right">Acciones</div>
+              <div class="hidden md:block text-center">Acciones</div>
             </div>
           </div>
           
@@ -308,7 +324,7 @@ const truncateText = (text: string, maxLength: number) => {
               :key="category.id"
               class="border-b border-border p-4 hover:bg-muted/50 transition-colors group"
             >
-              <div class="grid grid-cols-1 md:grid-cols-7 gap-4 items-start md:items-center">
+              <div class="grid grid-cols-1 md:grid-cols-8 gap-4 items-start md:items-center">
                 <!-- Categoría -->
                 <div class="md:col-span-2 cursor-pointer">
                   <div class="flex items-center gap-3 mb-1">
@@ -377,9 +393,23 @@ const truncateText = (text: string, maxLength: number) => {
                     {{ category.is_active ? 'Activa' : 'Inactiva' }}
                   </span>
                 </div>
-                
+              
                 <!-- Acciones (solo desktop) -->
-                <div class="hidden md:flex md:gap-2 md:justify-end">
+                <div class="hidden md:flex md:gap-2 md:justify-center">
+
+                  <button 
+                          @click="toggleStatus(category)" 
+                          :class="[ 
+                            'inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors border border-input', 
+                            category.is_active 
+                              ? 'text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20' 
+                              : 'text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20' 
+                          ]" 
+                          :title="category.is_active ? 'Desactivar' : 'Activar'" 
+                        > 
+                    <component :is="category.is_active ? PowerOff : Power" class="h-4 w-4" /> 
+                  </button>
+
                   <button 
                     @click="openEditModal(category)" 
                     class="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors border border-input"
@@ -396,6 +426,18 @@ const truncateText = (text: string, maxLength: number) => {
                 
                 <!-- Acciones móvil -->
                 <div class="md:hidden flex gap-2 mt-2">
+                  <button 
+                    @click="toggleStatus(category)" 
+                    :class="[ 
+                      'flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors border border-input', 
+                      category.is_active 
+                        ? 'text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20' 
+                        : 'text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20' 
+                    ]" 
+                  > 
+                    <component :is="category.is_active ? PowerOff : Power" class="w-4 h-4" /> 
+                    {{ category.is_active ? 'Desactivar' : 'Activar' }}
+                  </button>
                   <button 
                     @click="openEditModal(category)" 
                     class="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors border border-input"
