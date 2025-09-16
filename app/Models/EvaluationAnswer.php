@@ -71,12 +71,15 @@ class EvaluationAnswer extends Model
         }
     }
 
-    public function calculatePoints(): void
+    public function calculatePointsSafely(): int
     {
         $question = $this->question;
         $answer = $this->answer_value;
         $points = 0;
-
+    
+        // Obtener una copia inmutable de la pregunta para evitar modificaciones
+        $questionData = $question->toArray();
+        
         // Manejar diferentes tipos de preguntas
         switch ($question->question_type) {
             case 'yes_no':
@@ -89,11 +92,12 @@ class EvaluationAnswer extends Model
                     // Buscar la opción seleccionada y obtener sus puntos
                     foreach ($question->options as $option) {
                         if (is_array($option) && isset($option['text']) && $option['text'] === $answer) {
+                            // USAR LOS PUNTOS DE LA OPCIÓN, NO SOBRESCRIBIR
                             $points = $option['points'] ?? 0;
                             break;
                         } elseif (is_string($option) && $option === $answer) {
-                            // Compatibilidad con formato anterior
-                            $points = $question->points;
+                            // Compatibilidad con formato anterior - usar puntos base de la pregunta
+                            $points = $question->points ?? 0;
                             break;
                         }
                     }
@@ -106,11 +110,12 @@ class EvaluationAnswer extends Model
                     foreach ($answer as $selectedOption) {
                         foreach ($question->options as $option) {
                             if (is_array($option) && isset($option['text']) && $option['text'] === $selectedOption) {
+                                // SUMAR LOS PUNTOS DE CADA OPCIÓN SELECCIONADA
                                 $points += $option['points'] ?? 0;
                                 break;
                             } elseif (is_string($option) && $option === $selectedOption) {
                                 // Compatibilidad con formato anterior
-                                $points += $question->points;
+                                $points += $question->points ?? 0;
                                 break;
                             }
                         }
@@ -122,10 +127,13 @@ class EvaluationAnswer extends Model
             case 'textarea':
             case 'number':
                 // Para preguntas de texto/número, asignar puntos si hay respuesta
-                $points = !empty($answer) ? $question->points : 0;
+                $points = !empty($answer) ? ($question->points ?? 0) : 0;
                 break;
         }
-
+    
+        // Solo actualizar points_earned, nunca la pregunta
         $this->update(['points_earned' => $points]);
+        
+        return $points;
     }
 }

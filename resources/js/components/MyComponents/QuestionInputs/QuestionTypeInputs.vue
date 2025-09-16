@@ -100,10 +100,13 @@ const emit = defineEmits<Emits>();
 
 // Computed para calcular el total de puntos de las opciones
 const totalPoints = computed(() => {
-  if (!props.options || props.options.length === 0) return 0;
-  
-  // Para tipos que tienen puntos individuales por opción
+  // Solo calcular puntos automáticamente para tipos con opciones
   if (['select', 'radio', 'checkbox'].includes(props.questionType)) {
+    if (!props.options || props.options.length === 0) {
+      // No retornar 0, sino undefined para indicar que no hay cálculo automático
+      return undefined;
+    }
+    
     if (props.questionType === 'checkbox') {
       // Para checkboxes, sumar todos los puntos (máximo posible)
       return props.options.reduce((sum, option) => sum + (option.points || 0), 0);
@@ -113,12 +116,16 @@ const totalPoints = computed(() => {
     }
   }
   
-  return 0;
+  // Para otros tipos, no calcular automáticamente
+  return undefined;
 });
 
 // Watcher para emitir cambios en el total de puntos
 watch(totalPoints, (newTotal) => {
-  emit('update:totalPoints', newTotal);
+  // Solo emitir si hay un valor calculado válido
+  if (newTotal !== undefined) {
+    emit('update:totalPoints', newTotal);
+  }
 }, { immediate: true });
 
 const updatePlaceholder = (value: string) => {

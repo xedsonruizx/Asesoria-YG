@@ -9,7 +9,7 @@ interface Category {
     name: string
     description?: string
     color?: string
-    slug: string  // Agregar este campo
+    slug: string
 }
 
 interface Props {
@@ -30,9 +30,16 @@ const editForm = useForm({
     color: '#6B7280'
 })
 
-// Cargar datos cuando se abre el modal
-watch(() => props.category, (newCategory) => {
-    if (newCategory) {
+// Cargar datos cuando se abre el modal o cambia la categoría
+watch(() => [props.show, props.category], ([show, newCategory]) => {
+    if (show && newCategory) {
+        // Resetear el formulario con los datos de la categoría
+        editForm.reset({
+            name: newCategory.name,
+            description: newCategory.description || '',
+            color: newCategory.color || '#6B7280'
+        })
+        // También actualizar los valores directamente
         editForm.name = newCategory.name
         editForm.description = newCategory.description || ''
         editForm.color = newCategory.color || '#6B7280'
@@ -42,7 +49,6 @@ watch(() => props.category, (newCategory) => {
 const submitEdit = () => {
     if (!props.category) return
     
-    // Cambiar de category.id a category.slug
     editForm.put(update(props.category.slug).url, {
         onSuccess: () => {
             emit('updated')

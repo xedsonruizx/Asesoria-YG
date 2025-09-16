@@ -68,4 +68,12 @@ class User extends Authenticatable
             ->orderBy('completed_at')
             ->get(['total_score', 'completed_at', 'category_scores']);
     }
+
+    /**
+     * Relación con pagos
+     */
+    public function payments()
+    {
+        return $this->hasMany(Payment::class);
+    }
 }

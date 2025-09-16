@@ -538,38 +538,6 @@ const downloadPdf = (evaluationId: number) => {
                                                 </div>
                                             </div>
                                         </div>
-                                        
-                                        <!-- Acciones en móvil -->
-                                        <div class="flex flex-wrap gap-2 pt-2">
-                                            <button 
-                                                @click="viewEvaluation(evaluation)"
-                                                class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
-                                            >
-                                                <Eye class="h-3 w-3" />
-                                                Ver
-                                            </button>
-                                            <button 
-                                                @click="downloadPdf(evaluation.id)"
-                                                class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition-colors"
-                                            >
-                                                <Download class="h-3 w-3" />
-                                                PDF
-                                            </button>
-                                            <button 
-                                                @click="resetEvaluation(evaluation.id)"
-                                                class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded transition-colors"
-                                            >
-                                                <RotateCcw class="h-3 w-3" />
-                                                Reiniciar
-                                            </button>
-                                            <button 
-                                                @click="confirmDelete(evaluation)"
-                                                class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors"
-                                            >
-                                                <Trash2 class="h-3 w-3" />
-                                                Eliminar
-                                            </button>
-                                        </div>
                                     </div>
                                 </div>
                                 
@@ -602,9 +570,9 @@ const downloadPdf = (evaluationId: number) => {
                                                   </div>
                                               </div>
                                               <div class="text-right ml-2 flex-shrink-0">
-                                                  <div class="font-semibold text-foreground">
+                                                  <!-- <div class="font-semibold text-foreground">
                                                       {{ category.obtained_points || 0 }}/{{ category.total_possible_points || 0 }}
-                                                  </div>
+                                                  </div> -->
                                                   <div class="text-muted-foreground">
                                                       {{ getCategoryPercentage(category.obtained_points || 0, category.total_possible_points || 1) }}%
                                                   </div>

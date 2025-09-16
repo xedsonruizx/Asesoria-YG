@@ -50,6 +50,14 @@ interface CategoryScore {
     answeredQuestions?: number;
 }
 
+interface TriggeredMulta {
+    id: number;
+    title: string;
+    description: string;
+    fine_amount: number;
+    severity: string;
+}
+
 interface Evaluation {
     id: number;
     user_id: number;
@@ -61,19 +69,18 @@ interface Evaluation {
     status: 'draft' | 'in_progress' | 'completed';
 }
 
-interface Props {
+// Props
+const props = defineProps<{
     evaluation: Evaluation;
+    categories: Category[];
     questions: Question[];
     answers: Record<number, any>;
-    categories: Category[];
-    showResults?: boolean;
-    report?: any;
-    categoryScores?: Record<string, CategoryScore>;
-}
+    showResults: boolean;
+    categoryScores: Record<string, CategoryScore>;
+    triggeredMultas?: TriggeredMulta[];
+}>();
 
-const props = defineProps<Props>();
-
-// Usar el composable de persistencia
+// Composables
 const { 
     saveAnswersToStorage, 
     loadAnswersFromStorage, 
@@ -81,12 +88,12 @@ const {
     setupAutoSave 
 } = useEvaluationPersistence();
 
-// Estado reactivo - cargar desde localStorage primero
+// Estado reactivo
 const storedData = loadAnswersFromStorage();
 const evaluation = ref<Evaluation>(props.evaluation);
 const answers = ref<Record<number, any>>({
     ...props.answers,
-    ...storedData.answers // Priorizar datos locales
+    ...storedData.answers
 });
 const showResults = ref<boolean>(
     storedData.showResults || 
@@ -97,6 +104,10 @@ const showResults = ref<boolean>(
 const isSubmitting = ref<boolean>(false);
 const notification = ref<{ type: string; message: string }>({ type: '', message: '' });
 const currentCategoryIndex = ref<number>(0);
+const unsavedChanges = new Set<number>();
+
+// Agregar variable reactiva para las multas activadas
+const triggeredMultas = ref<TriggeredMulta[]>(props.triggeredMultas || []);
 
 // Función para verificar si una pregunta debe mostrarse
 const shouldShowQuestion = (question: Question): boolean => {
@@ -117,7 +128,6 @@ const shouldShowQuestion = (question: Question): boolean => {
     const parentAnswer = answers.value[parentQuestion.id];
     const expectedValue = question.show_condition.value;
     
-    // Para condiciones is_empty e is_not_empty, no verificar expectedValue
     if (!['empty', 'is_empty', 'filled', 'is_not_empty'].includes(question.show_condition.operator)) {
         if (expectedValue === null || expectedValue === undefined) return true;
     }
@@ -160,7 +170,6 @@ const shouldShowQuestion = (question: Question): boolean => {
             }
             const numParentAnswer = parseFloat(parentAnswer);
             const numExpectedValue = parseFloat(expectedValue);
-            // Validar que ambos valores sean números válidos
             if (isNaN(numParentAnswer) || isNaN(numExpectedValue)) {
                 console.warn('Comparación greater_than: uno de los valores no es numérico', { parentAnswer, expectedValue });
                 return false;
@@ -172,7 +181,6 @@ const shouldShowQuestion = (question: Question): boolean => {
             }
             const numParentAnswerLess = parseFloat(parentAnswer);
             const numExpectedValueLess = parseFloat(expectedValue);
-            // Validar que ambos valores sean números válidos
             if (isNaN(numParentAnswerLess) || isNaN(numExpectedValueLess)) {
                 console.warn('Comparación less_than: uno de los valores no es numérico', { parentAnswer, expectedValue });
                 return false;
@@ -193,7 +201,7 @@ const shouldShowQuestion = (question: Question): boolean => {
     }
 };
 
-// Categorías con preguntas organizadas
+// Computed properties
 const categoriesWithQuestions = computed(() => {
     return props.categories
         .filter(category => {
@@ -209,10 +217,7 @@ const categoriesWithQuestions = computed(() => {
             const categoryQuestions = props.questions
                 .filter(q => q.category_id === category.id && q.is_active);
             
-            
             const filteredQuestions = categoryQuestions.filter(shouldShowQuestion);
-            
-            
             const sortedQuestions = filteredQuestions.sort((a, b) => a.order - b.order);
             
             return {
@@ -230,14 +235,12 @@ const categoriesWithQuestions = computed(() => {
         });
 });
 
-// Progreso general
 const overallProgress = computed(() => {
     const totalQuestions = categoriesWithQuestions.value.reduce((sum, cat) => sum + cat.questions.length, 0);
     const answeredQuestions = categoriesWithQuestions.value.reduce((sum, cat) => sum + cat.answeredCount, 0);
     return totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
 });
 
-// Progreso de categoría actual
 const currentCategoryProgress = computed(() => {
     const currentCategory = categoriesWithQuestions.value[currentCategoryIndex.value];
     if (!currentCategory) return 0;
@@ -246,7 +249,26 @@ const currentCategoryProgress = computed(() => {
         : 0;
 });
 
-// Navegación entre categorías
+const hasUnsavedChanges = computed(() => {
+    return unsavedChanges.size > 0;
+});
+
+const allQuestionsAnswered = computed(() => {
+    return categoriesWithQuestions.value.every(category => 
+        category.questions.every(question => 
+            !question.is_required || 
+            (answers.value[question.id] !== undefined && 
+             answers.value[question.id] !== null && 
+             answers.value[question.id] !== '')
+        )
+    );
+});
+
+const totalQuestions = computed(() => {
+    return categoriesWithQuestions.value.reduce((sum, cat) => sum + cat.questions.length, 0);
+});
+
+// Métodos de navegación
 const goToCategory = (index: number) => {
     currentCategoryIndex.value = index;
 };
@@ -263,12 +285,8 @@ const previousCategory = () => {
     }
 };
 
-// Sistema simplificado - solo localStorage hasta envío final
-const unsavedChanges = new Set<number>();
-
-// Función para guardar respuesta SOLO localmente
+// Métodos de guardado
 const saveAnswer = (questionId: number, value: any) => {
-    // Actualizar respuesta local
     if (value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
         delete answers.value[questionId];
         unsavedChanges.delete(questionId);
@@ -277,18 +295,10 @@ const saveAnswer = (questionId: number, value: any) => {
         unsavedChanges.add(questionId);
     }
     
-    // Guardar inmediatamente en localStorage (sin servidor)
     saveAnswersToStorage(answers.value, showResults.value);
-    
     console.log(`💾 Respuesta guardada localmente para pregunta ${questionId}`);
 };
 
-// Función para mostrar indicador de cambios no guardados
-const hasUnsavedChanges = computed(() => {
-    return unsavedChanges.size > 0;
-});
-
-// Función para guardar borrador (opcional - solo localStorage)
 const saveDraft = () => {
     saveAnswersToStorage(answers.value, showResults.value);
     notification.value = {
@@ -298,7 +308,6 @@ const saveDraft = () => {
     setTimeout(clearNotification, 3000);
 };
 
-// Función para completar evaluación (única vez que se envía al servidor)
 const completeEvaluation = async () => {
     isSubmitting.value = true;
     
@@ -323,15 +332,16 @@ const completeEvaluation = async () => {
         });
         
         if (response.data.success) {
-            // Limpiar localStorage al completar exitosamente
             clearStoredAnswers();
             unsavedChanges.clear();
             
-            // Actualizar estado
             evaluation.value = response.data.evaluation;
             evaluation.value.status = 'completed';
             evaluation.value.is_completed = true;
             evaluation.value.completed_at = new Date().toISOString();
+            
+            // Actualizar las multas activadas desde la respuesta del servidor
+            triggeredMultas.value = response.data.triggered_multas || [];
             
             showResults.value = true;
             
@@ -355,31 +365,17 @@ const completeEvaluation = async () => {
     }
 };
 
-// Verificar si todas las preguntas están respondidas
-const allQuestionsAnswered = computed(() => {
-    return categoriesWithQuestions.value.every(category => 
-        category.questions.every(question => 
-            !question.is_required || 
-            (answers.value[question.id] !== undefined && 
-             answers.value[question.id] !== null && 
-             answers.value[question.id] !== '')
-        )
-    );
-});
-
-// Limpiar notificaciones
+// Otros métodos
 const clearNotification = () => {
     notification.value = { type: '', message: '' };
 };
 
-// Función para reiniciar la evaluación
 const handleRestart = async () => {
     try {
         await axios.post('/evaluation/restart', {
             evaluation_id: evaluation.value.id
         });
         
-        // Resetear estado local
         answers.value = {};
         showResults.value = false;
         unsavedChanges.clear();
@@ -398,7 +394,6 @@ const handleRestart = async () => {
     }
 };
 
-// Función para manejar solicitud de consultoría
 const handleRequestConsultation = () => {
     router.visit('/contact', {
         data: {
@@ -408,7 +403,6 @@ const handleRequestConsultation = () => {
     });
 };
 
-// Advertencia antes de salir si hay cambios no guardados
 const handleBeforeUnload = (event: BeforeUnloadEvent) => {
     if (hasUnsavedChanges.value) {
         event.preventDefault();
@@ -417,14 +411,6 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
     }
 };
 
-// Limpiar notificación después de 5 segundos
-watch(notification, (newVal) => {
-    if (newVal.message) {
-        setTimeout(clearNotification, 5000);
-    }
-});
-
-// Función para limpiar respuestas de preguntas eliminadas
 const cleanupDeletedQuestions = () => {
     const validQuestionIds = new Set(
         categoriesWithQuestions.value
@@ -440,23 +426,24 @@ const cleanupDeletedQuestions = () => {
     });
 };
 
+// Watchers
+watch(notification, (newVal) => {
+    if (newVal.message) {
+        setTimeout(clearNotification, 5000);
+    }
+});
+
+// Lifecycle hooks
 onMounted(() => {
     cleanupDeletedQuestions();
-    
-    // Configurar auto-save SOLO para localStorage
     setupAutoSave(answers, showResults);
-    
-    // Advertencia antes de salir
     window.addEventListener('beforeunload', handleBeforeUnload);
-    
     console.log('📱 Modo offline activado - respuestas se guardan solo localmente');
 });
 
 onUnmounted(() => {
-    // Remover listener
     window.removeEventListener('beforeunload', handleBeforeUnload);
     
-    // Guardar en localStorage antes de salir
     if (hasUnsavedChanges.value) {
         saveAnswersToStorage(answers.value, showResults.value);
         console.log('💾 Respuestas guardadas en localStorage antes de salir');
@@ -485,22 +472,22 @@ onUnmounted(() => {
         </div>
 
         <!-- Mostrar resultados si la evaluación está completada -->
-        <div v-if="showResults" class="container mx-auto px-4 py-8">
-            <EvaluationResults 
-                :categories="categoriesWithQuestions" 
-                :category-scores="categoryScores || {}" 
-                :answers="answers"
-                @restart="handleRestart"
-                @requestConsultation="handleRequestConsultation"
-            />
-        </div>
+        <EvaluationResults
+            v-if="showResults"
+            :categories="categories"
+            :category-scores="categoryScores"
+            :total-questions="totalQuestions"
+            :triggered-multas="triggeredMultas"
+            @restart="handleRestart"
+            @request-consultation="handleRequestConsultation"
+        />
 
         <!-- Formulario de evaluación -->
         <div v-else class="container mx-auto px-4 py-8">
             <!-- Progreso general -->
             <div class="mb-8">
                 <div class="flex items-center justify-between mb-2">
-                    <h1 class="text-3xl font-bold text-gray-900 mb-4 dark:text-white">Evaluación</h1>
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Evaluación</h1>
                     <span class="text-sm text-gray-600">{{ overallProgress }}% completado</span>
                 </div>
                 <div class="bg-gray-200 rounded-full h-2">
@@ -536,21 +523,16 @@ onUnmounted(() => {
             <!-- Mensaje cuando no hay categorías ni preguntas -->
             <div v-if="categoriesWithQuestions.length === 0" class="text-center py-12">
                 <div class="bg-gray-50 rounded-lg p-8 border border-gray-200">
-                    <div class="text-gray-400 mb-4">
-                        <!-- <svg class="mx-auto h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg> -->
-                    </div>
                     <h3 class="text-lg font-medium text-gray-900 mb-2">Sin preguntas disponibles</h3>
                     <p class="text-gray-500">No hay categorías ni preguntas configuradas para esta evaluación en este momento.</p>
                 </div>
             </div>
 
-            <!-- Contenido existente cuando hay categorías y preguntas -->
+            <!-- Contenido de la categoría actual -->
             <div v-else-if="categoriesWithQuestions[currentCategoryIndex]" class="space-y-6">
-                <Card class=" p-6 ">
+                <Card class="p-6">
                     <div class="mb-6">
-                        <h2 class="text-xl font-bold text-gray-900 mb-4 dark:text-white mb-2">
+                        <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
                             {{ categoriesWithQuestions[currentCategoryIndex].name }}
                         </h2>
                         <p v-if="categoriesWithQuestions[currentCategoryIndex].description" 
@@ -575,7 +557,7 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Preguntas de la categoría -->
-                    <div class="space-y-6 " >
+                    <div class="space-y-6">
                         <div 
                             v-for="question in categoriesWithQuestions[currentCategoryIndex].questions" 
                             :key="question.id"

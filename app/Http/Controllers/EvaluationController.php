@@ -17,6 +17,8 @@ class EvaluationController extends Controller
 {
     public function index()
     {
+        // INDEX DONDE SE EVALUA AL USUARIO Y SE MUESTRA EL RESULTADO DE LA EVALUACION
+        
         $user = Auth::user();
         $evaluation = $user->evaluations()->latest()->first();
         
@@ -28,7 +30,7 @@ class EvaluationController extends Controller
                 'total_score' => 0,
                 'total_progress' => 0,
                 'status' => 'draft',
-                'is_active' => true, // Agregar campo is_active
+                'is_active' => true,
             ]);
         }
     
@@ -43,7 +45,6 @@ class EvaluationController extends Controller
         }
     
         // Si la evaluación ya está completada, mostrar resultados
-        // Para evaluaciones completadas
         if ($evaluation->status === 'completed') {
             $report = $evaluation->generateReport();
             
@@ -65,7 +66,7 @@ class EvaluationController extends Controller
             // Obtener solo preguntas que tienen respuestas
             $questionsWithAnswers = EvaluationQuestion::whereIn('id', $answeredQuestionIds)
                 ->where('is_active', true)
-                ->orderBy('order')  // Mantener order para ordenamiento visual
+                ->orderBy('order')
                 ->get();
             
             $categories = EvaluationCategory::where('is_active', true)
@@ -76,6 +77,14 @@ class EvaluationController extends Controller
                 ->orderBy('id')
                 ->get();
             
+            // Asegurar que las multas activadas estén disponibles
+            $triggeredMultas = $evaluation->triggered_multas ?? [];
+            
+            // Si no hay multas guardadas pero hay respuestas, re-evaluar
+            if (empty($triggeredMultas) && !empty($answeredQuestionIds)) {
+                $triggeredMultas = $evaluation->evaluateTriggeredMultas();
+            }
+            
             $finalData = [
                 'evaluation' => $evaluation,
                 'report' => $report,
@@ -83,7 +92,8 @@ class EvaluationController extends Controller
                 'categoryScores' => $categoryScores,
                 'answers' => $existingAnswers,
                 'categories' => $categories,
-                'questions' => $questionsWithAnswers
+                'questions' => $questionsWithAnswers,
+                'triggeredMultas' => $triggeredMultas,
             ];
             
             return Inertia::render('ClientMenu/Evaluation', $finalData);
@@ -265,8 +275,8 @@ class EvaluationController extends Controller
                             'status'        => 'completed',
                         ]);
     
-                        // Calcular puntos para la respuesta
-                        $answer->calculatePoints();
+                        // Calcular puntos usando el método correcto
+                        $answer->calculatePointsSafely();
                         
                     }
                 }
@@ -274,6 +284,9 @@ class EvaluationController extends Controller
     
             // Calcular scores por categoría
             $evaluation->calculateScoresByCategory();
+            
+            // Evaluar multas activadas basándose en las respuestas
+            $triggeredMultas = $evaluation->evaluateTriggeredMultas();
             
             // Marcar evaluación como completada
             $evaluation->update([
@@ -288,6 +301,7 @@ class EvaluationController extends Controller
                 'success' => true,
                 'message' => 'Evaluación completada exitosamente',
                 'evaluation' => $evaluation->fresh(),
+                'triggered_multas' => $triggeredMultas, // Incluir multas activadas en la respuesta
             ]);
             
         } catch (\Exception $e) {

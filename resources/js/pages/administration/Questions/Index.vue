@@ -487,11 +487,8 @@ const getDependencyInfo = (question: Question) => {
           <div class="bg-orange-50 dark:bg-orange-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md flex-1 sm:flex-none">
             <span class="font-semibold text-orange-700 dark:text-orange-300 text-xs sm:text-sm">Eliminadas: {{ props.questions.filter(q => q.deleted_at).length }}</span>
           </div>
-          <div class="bg-blue-50 dark:bg-blue-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md flex-1 sm:flex-none">
-            <span class="font-semibold text-blue-700 dark:text-blue-300 text-xs sm:text-sm">Con Respuestas: {{ props.questions.filter(q => q.has_answers).length }}</span>
-          </div>
           <div class="bg-purple-50 dark:bg-purple-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md flex-1 sm:flex-none">
-            <span class="font-semibold text-purple-700 dark:text-purple-300 text-xs sm:text-sm">Con Multas: {{ props.questions.filter(q => q.multa_condition?.multa_id).length }}</span>
+            <span class="font-semibold text-purple-700 dark:text-purple-300 text-xs sm:text-sm">Con Multas: {{ props.questions.filter(q => q.multas && q.multas.length > 0).length }}</span>
           </div>
         </div>
       </div>

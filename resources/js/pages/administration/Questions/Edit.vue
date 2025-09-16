@@ -239,6 +239,12 @@ const submitForm = () => {
   if (currentUrl.searchParams.get('is_active')) filters.is_active = currentUrl.searchParams.get('is_active');
   if (currentUrl.searchParams.get('show_deleted')) filters.show_deleted = currentUrl.searchParams.get('show_deleted');
   
+    if (form.points === 0) { form.points = 1;}
+
+  console.log('Form data:', form.data());
+
+
+
   form.put(`/admin/questions/${props.question.id}`, {
     data: { ...form.data(), ...filters },
     onSuccess: () => {
@@ -314,7 +320,11 @@ onMounted(() => {
 
 // Agregar función para actualizar puntos totales
 const updateTotalPoints = (totalPoints: number) => {
-  form.points = totalPoints;
+  // Solo actualizar si el totalPoints calculado es mayor que 0
+  // o si los puntos actuales son 0 (para evitar sobrescribir puntos configurados manualmente)
+  if (totalPoints > 0 || form.points === 0) {
+    form.points = totalPoints;
+  }
 };
 
 // Watcher para resetear opciones cuando cambia el tipo de pregunta
@@ -336,13 +346,17 @@ watch(() => form.question_type, (newType, oldType) => {
       form.max_value = undefined;
     }
     
-    // Ajustar puntos según el tipo
+    // Solo ajustar puntos si es necesario y no hay puntos configurados
     if (['select', 'radio', 'checkbox'].includes(newType)) {
-      // Para tipos con opciones, los puntos se calculan automáticamente
-      form.points = 0;
+      // Para tipos con opciones, solo resetear si no hay opciones con puntos
+      if (!form.options || form.options.length === 0) {
+        form.points = 1;
+      }
     } else {
-      // Para otros tipos, establecer puntos por defecto
-      form.points = 1;
+      // Para otros tipos, solo establecer puntos por defecto si están en 0
+      if (form.points === 0) {
+        form.points = 1;
+      }
     }
   }
 });

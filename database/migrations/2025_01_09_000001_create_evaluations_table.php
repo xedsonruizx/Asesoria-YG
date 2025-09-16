@@ -21,6 +21,7 @@ return new class extends Migration
             $table->timestamp('completed_at')->nullable();
             $table->timestamp('expires_at')->nullable(); // Para evaluaciones con tiempo límite
             $table->json('metadata')->nullable(); // Datos adicionales del reporte
+            $table->json('triggered_multas')->nullable();
             $table->timestamps();
             $table->softDeletes();
             
