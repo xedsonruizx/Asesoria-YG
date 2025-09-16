@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 class EvaluationAnswer extends Model
 {
@@ -33,6 +34,41 @@ class EvaluationAnswer extends Model
     public function question(): BelongsTo
     {
         return $this->belongsTo(EvaluationQuestion::class, 'question_id');
+    }
+
+    /**
+     * Método personalizado para crear o actualizar respuesta de forma segura
+     */
+    public static function safeUpsert(int $evaluationId, int $questionId, $answerValue): self
+    {
+        // Usar firstOrNew para obtener el registro existente o crear uno nuevo
+        $answer = self::firstOrNew([
+            'evaluation_id' => $evaluationId,
+            'question_id' => $questionId,
+        ]);
+        
+        // Actualizar el valor de la respuesta
+        $answer->answer_value = $answerValue;
+        
+        // Intentar guardar con manejo de duplicados
+        try {
+            $answer->save();
+            return $answer;
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            // Si falla por duplicado, buscar el registro existente
+            $existingAnswer = self::where([
+                'evaluation_id' => $evaluationId,
+                'question_id' => $questionId,
+            ])->first();
+            
+            if ($existingAnswer) {
+                $existingAnswer->update(['answer_value' => $answerValue]);
+                return $existingAnswer;
+            }
+            
+            // Si no existe, relanzar la excepción
+            throw $e;
+        }
     }
 
     public function calculatePoints(): void

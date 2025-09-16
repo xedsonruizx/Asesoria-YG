@@ -8,8 +8,10 @@ use App\Models\EvaluationCategory;
 use App\Models\EvaluationQuestion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
+use Symfony\Component\ErrorHandler\Debug;
 
 class EvaluationController extends Controller
 {
@@ -135,80 +137,98 @@ class EvaluationController extends Controller
         return response()->json($report);
     }
 
-    public function saveAnswer(Request $request)
-    {
-        $request->validate([
-            'evaluation_id' => 'required|exists:evaluations,id',
-            'question_id' => 'required|integer',
-            'answer_value' => 'nullable', // Cambiar de 'required' a 'nullable'
+   public function saveAnswer(Request $request)
+{
+    $request->validate([
+        'evaluation_id' => 'required|integer',
+        'question_id' => 'required|integer',
+        'answer_value' => 'nullable',
+    ]);
+
+    $question = EvaluationQuestion::findOrFail($request->question_id);
+    $answerValue = $request->answer_value;
+
+    Log::info('saveAnswer', [
+        'evaluation_id' => $request->evaluation_id,
+        'question_id' => $request->question_id,
+        'answer_value' => $answerValue,
+    ]);
+
+    Log::info('saveAnswer', [
+        'evaluation_id' => $question->evaluation_id,
+        'question_id' => $question->id,
+        'answer_value' => $answerValue,
+    ]);
+
+    // Si el valor está vacío, eliminar la respuesta
+    if (empty($answerValue) || (is_array($answerValue) && empty(array_filter($answerValue)))) {
+        EvaluationAnswer::where([
+            'evaluation_id' => $request->evaluation_id,
+            'question_id' => $request->question_id,
+        ])->delete();
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Respuesta eliminada',
+            'deleted' => true
         ]);
+    }
     
-        $evaluation = Evaluation::findOrFail($request->evaluation_id);
-        
-        // Verificar que la evaluación pertenece al usuario autenticado
-        if ($evaluation->user_id !== Auth::id()) {
-            abort(403);
-        }
+    Log::info('PASO 1');
+    // Para preguntas de checkbox, asegurar que sea un array
+    if ($question->question_type === 'checkbox' && !is_array($answerValue)) {
+        $answerValue = [$answerValue];
+    }
     
-        // Verificar si la pregunta existe (incluyendo eliminadas)
-        $question = EvaluationQuestion::withTrashed()->find($request->question_id);
-        
-        if (!$question) {
-            return response()->json([
-                'success' => false,
-                'message' => 'La pregunta no existe'
-            ], 404);
-        }
-        
-        // Si la pregunta está eliminada, no permitir guardar nuevas respuestas
-        if ($question->trashed()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No se puede guardar respuesta para una pregunta eliminada',
-                'question_deleted' => true
-            ], 422);
-        }
-    
-        // Procesar la respuesta según el tipo de pregunta
-        $answerValue = $request->answer_value;
-        
-        // Si el valor está vacío, eliminar la respuesta existente
-        if ($answerValue === null || $answerValue === '' || (is_array($answerValue) && empty($answerValue))) {
-            EvaluationAnswer::where([
+    // Para preguntas yes_no, convertir a boolean
+    if ($question->question_type === 'yes_no') {
+        $answerValue = filter_var($answerValue, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    // 🔑 Normalizar antes de guardar
+    if (is_array($answerValue)) {
+        $answerValue = json_encode($answerValue);
+    } elseif (is_bool($answerValue)) {
+        $answerValue = $answerValue ? '1' : '0';
+    }
+    Log::info('PASO 2');
+    try {
+        $answer = EvaluationAnswer::where([
+            'evaluation_id' => $request->evaluation_id,
+            'question_id'   => $request->question_id,
+        ])->first();
+
+        if ($answer) {
+            $answer->update(['answer_value' => $answerValue]);
+        } else {
+            $answer = EvaluationAnswer::create([
                 'evaluation_id' => $request->evaluation_id,
-                'question_id' => $request->question_id,
-            ])->delete();
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'Respuesta eliminada',
-                'deleted' => true
+                'question_id'   => $request->question_id,
+                'answer_value'  => $answerValue,
             ]);
         }
-        
-        // Para preguntas de checkbox, asegurar que sea un array
-        if ($question->question_type === 'checkbox' && !is_array($answerValue)) {
-            $answerValue = [$answerValue];
-        }
-        
-        // Para preguntas yes_no, convertir a boolean
-        if ($question->question_type === 'yes_no') {
-            $answerValue = filter_var($answerValue, FILTER_VALIDATE_BOOLEAN);
-        }
-    
-        $answer = EvaluationAnswer::updateOrCreate(
-            [
-                'evaluation_id' => $request->evaluation_id,
-                'question_id' => $request->question_id,
-            ],
-            ['answer_value' => $answerValue]
-        );
-    
+        Log::info('PASO 3');
         return response()->json([
             'success' => true,
             'answer' => $answer
         ]);
+    } catch (\Exception $e) {
+        Log::error('Error en saveAnswer: ' . $e->getMessage(), [
+            'evaluation_id' => $request->evaluation_id,
+            'question_id' => $request->question_id,
+            'answer_value' => $answerValue,
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al guardar la respuesta. Intenta nuevamente.'
+        ], 500);
     }
+}
+
+
+
 
     public function submit(Request $request)
     {
@@ -222,38 +242,68 @@ class EvaluationController extends Controller
             ], 404);
         }
     
-        // Guardar todas las respuestas
-        if ($request->has('answers')) {
-            foreach ($request->answers as $questionId => $answerValue) {
-                // Validar que questionId sea válido y answerValue no sea null
-                if ($questionId > 0 && $answerValue !== null && $answerValue !== '') {
-                    $answer = EvaluationAnswer::updateOrCreate(
-                        [
+        try {
+            DB::beginTransaction();
+            
+            // 🔑 BORRAR FÍSICAMENTE todas las respuestas existentes (no soft delete)
+            $deletedCount = $evaluation->answers()->forceDelete(); // Eliminar físicamente
+            
+            // Guardar todas las respuestas nuevas
+            if ($request->has('answers')) {
+                foreach ($request->answers as $questionId => $answerValue) {
+                    // Validar que questionId sea válido y answerValue no sea null/vacío
+                    if ($questionId > 0 && $answerValue !== null && $answerValue !== '') {
+                        
+                        // Normalizar el valor antes de guardar
+                        $normalizedValue = is_array($answerValue) ? json_encode($answerValue) : $answerValue;
+                        
+                        // Crear nueva respuesta
+                        $answer = EvaluationAnswer::create([
                             'evaluation_id' => $evaluation->id,
-                            'question_id' => $questionId,
-                        ],
-                        ['answer_value' => $answerValue]
-                    );
-                    
-                    // Calcular puntos para cada respuesta
-                    $answer->calculatePoints();
+                            'question_id'   => $questionId,
+                            'answer_value'  => $normalizedValue,
+                            'status'        => 'completed',
+                        ]);
+    
+                        // Calcular puntos para la respuesta
+                        $answer->calculatePoints();
+                        
+                    }
                 }
             }
+    
+            // Calcular scores por categoría
+            $evaluation->calculateScoresByCategory();
+            
+            // Marcar evaluación como completada
+            $evaluation->update([
+                'status' => 'completed',
+                'completed_at' => now(),
+            ]);
+    
+            DB::commit();
+            
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Evaluación completada exitosamente',
+                'evaluation' => $evaluation->fresh(),
+            ]);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Error al completar evaluación: ' . $e->getMessage(), [
+                'evaluation_id' => $evaluation->id,
+                'user_id' => $user->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al completar la evaluación. Intenta nuevamente.'
+            ], 500);
         }
-    
-        // Usar el método correcto y eliminar campos inexistentes
-        $evaluation->calculateScoresByCategory();
-        
-        $evaluation->update([
-            'status' => 'completed',
-            'completed_at' => now(),
-        ]);
-    
-        return response()->json([
-            'success' => true,
-            'message' => 'Evaluación completada exitosamente',
-            'evaluation' => $evaluation->fresh(),
-        ]);
     }
 
     public function restart(Request $request)

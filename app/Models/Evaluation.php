@@ -75,14 +75,21 @@ class Evaluation extends Model
 
         $avgProgress = count($categories) > 0 ? round($totalProgress / count($categories)) : 0;
 
-        $this->update([
+        // Preparar los datos para actualizar
+        $updateData = [
             'category_scores' => $categoryScores,
             'category_progress' => $categoryProgress,
             'total_score' => $totalScore,
             'total_progress' => $avgProgress,
-            'status' => $avgProgress === 100 ? 'completed' : 'in_progress',
-            'completed_at' => $avgProgress === 100 ? now() : null,
-        ]);
+        ];
+
+        // Solo actualizar el status si la evaluación no está completada
+        if ($this->status !== 'completed') {
+            $updateData['status'] = $avgProgress === 100 ? 'completed' : 'in_progress';
+            $updateData['completed_at'] = $avgProgress === 100 ? now() : null;
+        }
+
+        $this->update($updateData);
     }
 
     public function generateReport(): array

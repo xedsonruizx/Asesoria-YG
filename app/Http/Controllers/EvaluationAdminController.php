@@ -8,6 +8,8 @@ use App\Models\Evaluation;
 use App\Models\User;
 use App\Models\EvaluationCategory;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Exception;
+use Illuminate\Support\Facades\Log;
 
 class EvaluationAdminController extends Controller
 {
@@ -16,7 +18,14 @@ class EvaluationAdminController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Evaluation::with(['user']);
+        $query = Evaluation::with(['user', 'answers.question.category'])
+                          ->where('status', 'completed') // Solo evaluaciones completadas
+                          ->has('answers'); // Solo evaluaciones que tengan al menos 1 respuesta
+        
+        // Filtrar evaluaciones que tengan respuestas en categorías activas
+        $query->whereHas('answers.question.category', function ($q) {
+            $q->where('is_active', true);
+        });
         
         // Filtro para mostrar eliminados
         if ($request->filled('show_deleted')) {
@@ -43,13 +52,78 @@ class EvaluationAdminController extends Controller
         
         $evaluations = $query->latest()->paginate(10);
     
+        // Generar puntajes por categoría para cada evaluación
+        $evaluationsWithScores = $evaluations->getCollection()->map(function ($evaluation) {
+            // Solo procesar si la evaluación tiene respuestas en categorías activas
+            $activeAnswers = $evaluation->answers->filter(function ($answer) {
+                return $answer->question && 
+                       $answer->question->category && 
+                       $answer->question->category->is_active;
+            });
+            
+            if ($activeAnswers->count() > 0) {
+                // Guardar el status original para evitar que se cambie automáticamente
+                $originalStatus = $evaluation->status;
+                $originalCompletedAt = $evaluation->completed_at;
+                
+                // Asegurar que los puntajes estén actualizados
+                $evaluation->calculateScoresByCategory();
+                
+                // Restaurar el status original si era completada
+                if ($originalStatus === 'completed') {
+                    $evaluation->update([
+                        'status' => 'completed',
+                        'completed_at' => $originalCompletedAt
+                    ]);
+                }
+                
+                // Generar reporte completo con detalles por categoría
+                $report = $evaluation->generateReport();
+                
+                // Filtrar solo categorías activas en el reporte
+                $activeCategoryDetails = collect($report['categories'])->filter(function ($category) {
+                    // Verificar si la categoría está activa
+                    $categoryModel = \App\Models\EvaluationCategory::where('slug', $category['slug'])->first();
+                    return $categoryModel && $categoryModel->is_active;
+                })->values()->toArray();
+                
+                // Agregar los datos del reporte a la evaluación
+                $evaluation->category_details = $activeCategoryDetails;
+                $evaluation->total_percentage = $report['total_percentage'] ?? 0;
+            } else {
+                // Si no hay respuestas en categorías activas, establecer valores por defecto
+                $evaluation->category_details = [];
+                $evaluation->total_percentage = 0;
+            }
+            
+            return $evaluation;
+        });
+        
+        // Reemplazar la colección en el paginador
+        $evaluations->setCollection($evaluationsWithScores);
+    
+        // Actualizar las estadísticas para reflejar solo evaluaciones con respuestas en categorías activas
         $stats = [
-            'total' => Evaluation::count(),
-            'completed' => Evaluation::where('status', 'completed')->count(),
+            'total' => Evaluation::where('status', 'completed')
+                                ->has('answers')
+                                ->whereHas('answers.question.category', fn($q) => $q->where('is_active', true))
+                                ->count(),
+            'completed' => Evaluation::where('status', 'completed')
+                                    ->has('answers')
+                                    ->whereHas('answers.question.category', fn($q) => $q->where('is_active', true))
+                                    ->count(),
             'in_progress' => Evaluation::where('status', 'in_progress')->count(),
             'draft' => Evaluation::where('status', 'draft')->count(),
-            'active' => Evaluation::where('is_active', true)->count(),
-            'inactive' => Evaluation::where('is_active', false)->count(),
+            'active' => Evaluation::where('status', 'completed')
+                                 ->where('is_active', true)
+                                 ->has('answers')
+                                 ->whereHas('answers.question.category', fn($q) => $q->where('is_active', true))
+                                 ->count(),
+            'inactive' => Evaluation::where('status', 'completed')
+                                   ->where('is_active', false)
+                                   ->has('answers')
+                                   ->whereHas('answers.question.category', fn($q) => $q->where('is_active', true))
+                                   ->count(),
         ];
     
         $categories = EvaluationCategory::active()->ordered()->get();
@@ -166,11 +240,11 @@ class EvaluationAdminController extends Controller
     {
         try {
             $evaluation = Evaluation::findOrFail($id);
-            $evaluation->delete(); // Soft delete
+            $evaluation->forceDelete(); // Hard delete definitivo
 
             return redirect()->route('admin.evaluations.index')
-                           ->with('success', 'Evaluación eliminada exitosamente.');
-        } catch (\Exception $e) {
+                           ->with('success', 'Evaluación eliminada definitivamente.');
+        } catch (Exception $e) {
             Log::error('Error al eliminar evaluación: ' . $e->getMessage());
             return back()->withErrors(['error' => 'Error al eliminar la evaluación.']);
         }

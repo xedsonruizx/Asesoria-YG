@@ -2,15 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Inertia\Inertia;
-use App\Models\EvaluationQuestion;
-use App\Models\EvaluationCategory;
-use Illuminate\Support\Facades\Log;
-use Exception;
 use App\Http\Requests\StoreEvaluationQuestionRequest;
 use App\Http\Requests\UpdateEvaluationQuestionRequest;
+use App\Models\EvaluationCategory;
+use App\Models\EvaluationQuestion;
 use App\Models\Multa;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
+use Exception;
 
 class EvaluationQuestionController extends Controller
 {
@@ -103,22 +104,29 @@ class EvaluationQuestionController extends Controller
             $questionData['points'] = 1;
         }
     
-        // Crear la pregunta
-        $question = EvaluationQuestion::create($questionData);
-        
-        // Asociar multas si están presentes
-        if ($request->has('multa_condition') && !empty($request->multa_condition)) {
-            $multaCondition = $request->multa_condition;
+        // Usar transacción para asegurar consistencia
+        $question = DB::transaction(function () use ($questionData, $request) {
+            // Crear la pregunta
+            $question = EvaluationQuestion::create($questionData);
             
-            // Verificar que multa_id no esté vacío y sea un número válido
-            if (!empty($multaCondition['multa_id']) && is_numeric($multaCondition['multa_id'])) {
-                $question->multas()->attach($multaCondition['multa_id'], [
-                    'trigger_condition' => $multaCondition['trigger_condition'] ?? 'always',
-                    'trigger_value' => $multaCondition['trigger_value'] ?? null,
-                    'is_active' => true
-                ]);
+            // Asociar multas si están presentes
+            if ($request->has('multa_condition') && !empty($request->multa_condition)) {
+                $multaCondition = $request->multa_condition;
+                
+                // Verificar que multa_id no esté vacío y sea un número válido
+                if (!empty($multaCondition['multa_id']) && is_numeric($multaCondition['multa_id'])) {
+                    $question->multas()->attach($multaCondition['multa_id'], [
+                        'trigger_condition' => $multaCondition['trigger_condition'] ?? 'always',
+                        'trigger_value' => $multaCondition['trigger_value'] ?? null,
+                        'is_active' => true,
+                        'created_at' => now(),
+                        'updated_at' => now()
+                    ]);
+                }
             }
-        }
+            
+            return $question;
+        });
     
         // Preservar filtros en la redirección
         $filters = $request->only(['search', 'category_id', 'question_type', 'is_active', 'show_deleted']);
@@ -209,27 +217,36 @@ class EvaluationQuestionController extends Controller
             }
         }
     
-        $question->update($questionData);
-        
-        // Sincronizar multas
-        if ($request->has('multa_condition')) {
-            $multaCondition = $request->multa_condition;
+        // Usar transacción para asegurar consistencia
+        DB::transaction(function () use ($question, $questionData, $request) {
+            // Actualizar la pregunta
+            $question->update($questionData);
             
-            // Primero, desasociar todas las multas existentes
+            // ELIMINAR COMPLETAMENTE todas las asociaciones anteriores de multas
             $question->multas()->detach();
             
-            // Luego, asociar la nueva multa si está presente y es válida
-            if (!empty($multaCondition['multa_id']) && is_numeric($multaCondition['multa_id'])) {
-                $question->multas()->attach($multaCondition['multa_id'], [
-                    'trigger_condition' => $multaCondition['trigger_condition'] ?? 'always',
-                    'trigger_value' => $multaCondition['trigger_value'] ?? null,
-                    'is_active' => true
-                ]);
+            // Sincronizar multas - asociar nuevas multas si están presentes
+            if ($request->has('multa_condition')) {
+                $multaCondition = $request->multa_condition;
+                
+                // Asociar la nueva multa si está presente y es válida
+                if (!empty($multaCondition['multa_id']) && is_numeric($multaCondition['multa_id'])) {
+                    $question->multas()->attach($multaCondition['multa_id'], [
+                        'trigger_condition' => $multaCondition['trigger_condition'] ?? 'always',
+                        'trigger_value' => $multaCondition['trigger_value'] ?? null,
+                        'is_active' => true,
+                        'created_at' => now(),
+                        'updated_at' => now()
+                    ]);
+                }
             }
-        } else {
-            // Si no hay multa_condition en la request, desasociar todas las multas
-            $question->multas()->detach();
-        }
+            
+            // Si hay respuestas existentes para esta pregunta y se cambió el tipo o las opciones,
+            // invalidar las respuestas que ya no son válidas
+            if ($question->wasChanged(['question_type', 'options'])) {
+                $this->invalidateIncompatibleAnswers($question);
+            }
+        });
         
         // Si el orden cambió, actualizar las dependencias que referencian esta pregunta
         if ($orderChanged) {
@@ -240,6 +257,21 @@ class EvaluationQuestionController extends Controller
         $filters = $request->only(['search', 'category_id', 'question_type', 'is_active', 'show_deleted']);
         return redirect()->route('admin.questions.index', $filters)
                        ->with('success', 'Pregunta actualizada exitosamente.');
+    }
+
+    /**
+     * Invalidar respuestas que ya no son compatibles con la pregunta actualizada
+     */
+    private function invalidateIncompatibleAnswers(EvaluationQuestion $question)
+    {
+        // Si cambió el tipo de pregunta o las opciones, las respuestas existentes
+        // podrían no ser válidas, así que las marcamos para revisión
+        $question->answers()->update([
+            'is_active' => false,
+            'updated_at' => now()
+        ]);
+        
+        Log::info("Respuestas invalidadas para pregunta ID: {$question->id} debido a cambios en tipo o opciones");
     }
 
     /**

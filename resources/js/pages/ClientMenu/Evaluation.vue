@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import Button from '@/components/ui/button/Button.vue';
 import Card from '@/components/ui/card/Card.vue';
 import TopBar from '@/components/MyComponents/TopBar.vue';
 import QuestionInput from '@/components/QuestionInput.vue';
 import EvaluationResults from '@/components/EvaluationResults.vue';
+import { useEvaluationPersistence } from '@/composables/useEvaluationPersistence';
 import axios from 'axios';
 
 // Interfaces
@@ -72,10 +73,27 @@ interface Props {
 
 const props = defineProps<Props>();
 
-// Estado reactivo
+// Usar el composable de persistencia
+const { 
+    saveAnswersToStorage, 
+    loadAnswersFromStorage, 
+    clearStoredAnswers, 
+    setupAutoSave 
+} = useEvaluationPersistence();
+
+// Estado reactivo - cargar desde localStorage primero
+const storedData = loadAnswersFromStorage();
 const evaluation = ref<Evaluation>(props.evaluation);
-const answers = ref<Record<number, any>>(props.answers || {});
-const showResults = ref<boolean>(props.showResults || props.evaluation?.status === 'completed' || false);
+const answers = ref<Record<number, any>>({
+    ...props.answers,
+    ...storedData.answers // Priorizar datos locales
+});
+const showResults = ref<boolean>(
+    storedData.showResults || 
+    props.showResults || 
+    props.evaluation?.status === 'completed' || 
+    false
+);
 const isSubmitting = ref<boolean>(false);
 const notification = ref<{ type: string; message: string }>({ type: '', message: '' });
 const currentCategoryIndex = ref<number>(0);
@@ -245,35 +263,42 @@ const previousCategory = () => {
     }
 };
 
-// Guardar respuesta
-const saveAnswer = async (questionId: number, value: any) => {
+// Sistema simplificado - solo localStorage hasta envío final
+const unsavedChanges = new Set<number>();
+
+// Función para guardar respuesta SOLO localmente
+const saveAnswer = (questionId: number, value: any) => {
+    // Actualizar respuesta local
     if (value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
         delete answers.value[questionId];
+        unsavedChanges.delete(questionId);
     } else {
         answers.value[questionId] = value;
+        unsavedChanges.add(questionId);
     }
     
-    try {
-        const response = await axios.post('/evaluation/answer', {
-            evaluation_id: evaluation.value.id,
-            question_id: questionId,
-            answer_value: value
-        });
-        
-        if (response.data.deleted) {
-            delete answers.value[questionId];
-        }
-    } catch (error) {
-        console.error('Error saving answer:', error);
-        
-        if (error.response?.status === 422 && error.response?.data?.question_deleted) {
-            delete answers.value[questionId];
-            console.warn(`Pregunta ${questionId} eliminada, respuesta removida del cache`);
-        }
-    }
+    // Guardar inmediatamente en localStorage (sin servidor)
+    saveAnswersToStorage(answers.value, showResults.value);
+    
+    console.log(`💾 Respuesta guardada localmente para pregunta ${questionId}`);
 };
 
-// Completar evaluación
+// Función para mostrar indicador de cambios no guardados
+const hasUnsavedChanges = computed(() => {
+    return unsavedChanges.size > 0;
+});
+
+// Función para guardar borrador (opcional - solo localStorage)
+const saveDraft = () => {
+    saveAnswersToStorage(answers.value, showResults.value);
+    notification.value = {
+        type: 'success',
+        message: 'Borrador guardado localmente'
+    };
+    setTimeout(clearNotification, 3000);
+};
+
+// Función para completar evaluación (única vez que se envía al servidor)
 const completeEvaluation = async () => {
     isSubmitting.value = true;
     
@@ -290,37 +315,40 @@ const completeEvaluation = async () => {
             )
         );
         
+        console.log(`📤 Enviando ${Object.keys(visibleAnswers).length} respuestas al servidor...`);
+        
         const response = await axios.post('/evaluation/submit', {
             evaluation_id: evaluation.value.id,
             answers: visibleAnswers
         });
         
         if (response.data.success) {
-            // Actualizar el estado local con los datos del servidor
+            // Limpiar localStorage al completar exitosamente
+            clearStoredAnswers();
+            unsavedChanges.clear();
+            
+            // Actualizar estado
             evaluation.value = response.data.evaluation;
             evaluation.value.status = 'completed';
             evaluation.value.is_completed = true;
             evaluation.value.completed_at = new Date().toISOString();
             
-            // Mostrar resultados
             showResults.value = true;
             
-            // Mostrar notificación de éxito
             notification.value = {
                 type: 'success',
                 message: '¡Evaluación completada exitosamente! Refrescando página...'
             };
             
-            // Refrescar la página después de 2 segundos
             setTimeout(() => {
                 window.location.reload();
             }, 2000);
         }
     } catch (error) {
-        console.error('Error completing evaluation:', error);
+        console.error('❌ Error completing evaluation:', error);
         notification.value = {
             type: 'error',
-            message: 'Error al completar la evaluación'
+            message: 'Error al completar la evaluación. Las respuestas se mantienen guardadas localmente.'
         };
     } finally {
         isSubmitting.value = false;
@@ -354,20 +382,15 @@ const handleRestart = async () => {
         // Resetear estado local
         answers.value = {};
         showResults.value = false;
+        unsavedChanges.clear();
+        clearStoredAnswers();
         
-        // Usar la notificación existente en lugar de showNotification
         notification.value = {
             type: 'success',
             message: 'Evaluación reiniciada correctamente.'
         };
-        
-        // Remover el window.location.reload() para evitar el refresco
-        // setTimeout(() => {
-        //     window.location.reload();
-        // }, 2000);
     } catch (error) {
         console.error('Error al reiniciar evaluación:', error);
-        // Usar la notificación existente
         notification.value = {
             type: 'error',
             message: 'Error al reiniciar la evaluación.'
@@ -383,6 +406,15 @@ const handleRequestConsultation = () => {
             evaluation_completed: true
         }
     });
+};
+
+// Advertencia antes de salir si hay cambios no guardados
+const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+    if (hasUnsavedChanges.value) {
+        event.preventDefault();
+        event.returnValue = 'Tienes respuestas sin enviar. ¿Estás seguro de que quieres salir?';
+        return event.returnValue;
+    }
 };
 
 // Limpiar notificación después de 5 segundos
@@ -410,6 +442,25 @@ const cleanupDeletedQuestions = () => {
 
 onMounted(() => {
     cleanupDeletedQuestions();
+    
+    // Configurar auto-save SOLO para localStorage
+    setupAutoSave(answers, showResults);
+    
+    // Advertencia antes de salir
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    console.log('📱 Modo offline activado - respuestas se guardan solo localmente');
+});
+
+onUnmounted(() => {
+    // Remover listener
+    window.removeEventListener('beforeunload', handleBeforeUnload);
+    
+    // Guardar en localStorage antes de salir
+    if (hasUnsavedChanges.value) {
+        saveAnswersToStorage(answers.value, showResults.value);
+        console.log('💾 Respuestas guardadas en localStorage antes de salir');
+    }
 });
 </script>
 
@@ -418,16 +469,19 @@ onMounted(() => {
         <Head title="Evaluación" />
         
         <TopBar />
-        <!-- Notificación -->
-        <div v-if="notification.message" 
-             :class="[
-                 'fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all duration-300',
-                 notification.type === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
-             ]">
-            {{ notification.message }}
-            <button @click="clearNotification" class="ml-2 text-white hover:text-gray-200">
-                ×
-            </button>
+        
+        <!-- Indicador de cambios no guardados -->
+        <div v-if="hasUnsavedChanges" 
+             class="fixed top-16 right-4 z-40 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-3 rounded shadow-lg">
+            <div class="flex items-center">
+                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                </svg>
+                <span class="text-sm">Cambios guardados localmente</span>
+                <button @click="saveDraft" class="ml-2 text-xs bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600">
+                    Guardar borrador
+                </button>
+            </div>
         </div>
 
         <!-- Mostrar resultados si la evaluación está completada -->
@@ -483,9 +537,9 @@ onMounted(() => {
             <div v-if="categoriesWithQuestions.length === 0" class="text-center py-12">
                 <div class="bg-gray-50 rounded-lg p-8 border border-gray-200">
                     <div class="text-gray-400 mb-4">
-                        <svg class="mx-auto h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <!-- <svg class="mx-auto h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
+                        </svg> -->
                     </div>
                     <h3 class="text-lg font-medium text-gray-900 mb-2">Sin preguntas disponibles</h3>
                     <p class="text-gray-500">No hay categorías ni preguntas configuradas para esta evaluación en este momento.</p>
@@ -582,3 +636,6 @@ onMounted(() => {
     max-width: 1200px;
 }
 </style>
+
+
+

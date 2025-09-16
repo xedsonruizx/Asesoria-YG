@@ -299,13 +299,13 @@ const downloadPdf = (evaluationId: number) => {
                         <h1 class="text-xl sm:text-2xl font-bold mb-2 text-foreground">Gestión de Evaluaciones</h1>
                         <p class="text-muted-foreground text-sm sm:text-base">Administra y visualiza todas las evaluaciones del sistema</p>
                     </div>
-                    <button 
+                    <!-- <button 
                         @click="createEvaluation"
                         class="inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md transition-colors font-medium text-xs sm:text-sm w-full sm:w-auto"
                     >
                         <Plus class="h-4 w-4 flex-shrink-0" />
                         <span class="truncate">Nueva Evaluación</span>
-                    </button>
+                    </button> -->
                 </div>
                 
                 <!-- Estadísticas -->
@@ -316,27 +316,10 @@ const downloadPdf = (evaluationId: number) => {
                             <div>
                                 <p class="text-xs text-muted-foreground">Total</p>
                                 <p class="font-semibold text-foreground">{{ props.stats?.total || 0 }}</p>
+                              
                             </div>
                         </div>
                     </div>
-                    <!-- <div class="bg-green-50 dark:bg-green-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md">
-                        <div class="flex items-center gap-2">
-                            <FileText class="h-4 w-4 text-green-600" />
-                            <div>
-                                <p class="text-xs text-green-700 dark:text-green-300">Completadas</p>
-                                <p class="font-semibold text-green-700 dark:text-green-300">{{ props.stats?.completed || 0 }}</p>
-                            </div>
-                        </div>
-                    </div> -->
-                    <!-- <div class="bg-gray-50 dark:bg-gray-900/20 px-3 sm:px-4 py-2 sm:py-3 rounded-md">
-                        <div class="flex items-center gap-2">
-                            <FileText class="h-4 w-4 text-gray-600" />
-                            <div>
-                                <p class="text-xs text-gray-700 dark:text-gray-300">Borradores</p>
-                                <p class="font-semibold text-gray-700 dark:text-gray-300">{{ props.stats?.draft || 0 }}</p>
-                            </div>
-                        </div>
-                    </div> -->
                 </div>
             </div>
 
@@ -507,37 +490,85 @@ const downloadPdf = (evaluationId: number) => {
                                     </div>
                                     
                                     <!-- Información adicional en móvil -->
-                                    <div class="md:hidden mt-3 space-y-2">
+                                    <div class="md:hidden mt-3 space-y-3">
+                                        <!-- Estado -->
                                         <div class="flex items-center gap-2">
-                                            <strong class="text-foreground text-sm">Estado:</strong>
-                                            <span :class="getStatusColor(evaluation.status)" class="inline-flex px-2 py-1 text-xs font-semibold rounded-full">
+                                            <span class="text-xs text-muted-foreground">Estado:</span>
+                                            <span :class="getStatusColor(evaluation.status)" class="px-2 py-1 rounded-full text-xs font-medium">
                                                 {{ getStatusText(evaluation.status) }}
                                             </span>
                                         </div>
-                                        <div class="text-sm">
-                                            <strong class="text-foreground">Puntuación Total:</strong> 
-                                            <span class="text-muted-foreground">{{ evaluation.total_score }} pts</span>
-                                        </div>
+                                        
                                         <!-- Puntuación por categorías en móvil -->
-                                        <div class="text-sm">
-                                            <strong class="text-foreground">Categorías:</strong>
-                                            <div class="mt-2 space-y-2">
-                                                <div v-for="(score, category) in evaluation.category_scores" :key="category" v-show="score > 0" class="flex items-center gap-2">
-                                                    <span class="text-xs font-medium min-w-0 flex-shrink-0">{{ getCategoryDisplayName(category) }}:</span>
-                                                    <div class="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                                        <div 
-                                                            class="h-2 rounded-full transition-all" 
-                                                            :class="getCategoryBarColor(score, getCategoryMaxScore(category))"
-                                                            :style="{ width: getCategoryPercentage(score, getCategoryMaxScore(category)) + '%' }"
-                                                        ></div>
+                                        <div v-if="evaluation.category_details && evaluation.category_details.length > 0" class="space-y-2">
+                                            <div class="text-xs text-muted-foreground font-medium">Puntuación por Categoría:</div>
+                                            <div class="space-y-2">
+                                                <div 
+                                                    v-for="category in evaluation.category_details" 
+                                                    :key="category.slug"
+                                                    class="flex items-center justify-between text-xs"
+                                                >
+                                                    <div class="flex items-center gap-2 min-w-0 flex-1">
+                                                        <span class="font-medium text-foreground truncate">
+                                                            {{ getCategoryDisplayName(category.slug) }}
+                                                        </span>
+                                                        <div class="flex-1 bg-gray-200 rounded-full h-1.5 min-w-[30px]">
+                                                            <div 
+                                                                :class="getCategoryBarColor(category.obtained_points || 0, category.total_possible_points || 1)"
+                                                                class="h-1.5 rounded-full transition-all duration-300"
+                                                                :style="{ width: getCategoryPercentage(category.obtained_points || 0, category.total_possible_points || 1) + '%' }"
+                                                            ></div>
+                                                        </div>
                                                     </div>
-                                                    <span class="text-xs text-muted-foreground min-w-0 flex-shrink-0">{{ score }}/{{ getCategoryMaxScore(category) }}</span>
+                                                    <div class="text-right ml-2 flex-shrink-0">
+                                                        <div class="font-semibold text-foreground">
+                                                            {{ getCategoryPercentage(category.obtained_points || 0, category.total_possible_points || 1) }}%
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Total general en móvil -->
+                                                <div class="pt-2 border-t border-border">
+                                                    <div class="flex items-center justify-between text-xs">
+                                                        <span class="font-bold text-foreground">Total:</span>
+                                                        <div class="font-bold text-foreground">
+                                                            {{ evaluation.total_percentage || 0 }}%
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div class="text-sm">
-                                            <strong class="text-foreground">Fecha:</strong> 
-                                            <span class="text-muted-foreground">{{ formatDate(evaluation.created_at) }}</span>
+                                        
+                                        <!-- Acciones en móvil -->
+                                        <div class="flex flex-wrap gap-2 pt-2">
+                                            <button 
+                                                @click="viewEvaluation(evaluation)"
+                                                class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
+                                            >
+                                                <Eye class="h-3 w-3" />
+                                                Ver
+                                            </button>
+                                            <button 
+                                                @click="downloadPdf(evaluation.id)"
+                                                class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition-colors"
+                                            >
+                                                <Download class="h-3 w-3" />
+                                                PDF
+                                            </button>
+                                            <button 
+                                                @click="resetEvaluation(evaluation.id)"
+                                                class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded transition-colors"
+                                            >
+                                                <RotateCcw class="h-3 w-3" />
+                                                Reiniciar
+                                            </button>
+                                            <button 
+                                                @click="confirmDelete(evaluation)"
+                                                class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors"
+                                            >
+                                                <Trash2 class="h-3 w-3" />
+                                                Eliminar
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -550,24 +581,61 @@ const downloadPdf = (evaluationId: number) => {
                                 </div>
                                 
                                 <!-- Puntuación por categorías (solo desktop) -->
-                                <div class="hidden md:block">
-                                    <div class="space-y-2">
-                                        <div v-for="(score, category) in evaluation.category_scores" :key="category" v-show="score > 0" class="flex items-center gap-2">
-                                            <span class="text-xs font-medium min-w-0 w-16 flex-shrink-0 truncate" :title="getCategoryDisplayName(category)">{{ getCategoryDisplayName(category) }}:</span>
-                                            <div class="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2 min-w-0">
-                                                <div 
-                                                    class="h-2 rounded-full transition-all" 
-                                                    :class="getCategoryBarColor(score, getCategoryMaxScore(category))"
-                                                    :style="{ width: getCategoryPercentage(score, getCategoryMaxScore(category)) + '%' }"
-                                                ></div>
-                                            </div>
-                                            <span class="text-xs text-muted-foreground min-w-0 flex-shrink-0">{{ score }}/{{ getCategoryMaxScore(category) }}</span>
-                                        </div>
-                                        <!-- <div class="text-xs text-muted-foreground mt-1">
-                                            <strong>Total:</strong> {{ evaluation.total_score }} pts
-                                        </div> -->
-                                    </div>
-                                </div>
+                             <!-- Puntuación por Categoría -->
+                                  <div class="hidden md:block">
+                                      <div v-if="evaluation.category_details && evaluation.category_details.length > 0" class="space-y-2">
+                                          <div 
+                                              v-for="category in evaluation.category_details" 
+                                              :key="category.slug"
+                                              class="flex items-center justify-between text-xs"
+                                          >
+                                              <div class="flex items-center gap-2 min-w-0 flex-1">
+                                                  <span class="font-medium text-foreground truncate">
+                                                      {{ getCategoryDisplayName(category.slug) }}
+                                                  </span>
+                                                  <div class="flex-1 bg-gray-200 rounded-full h-1.5 min-w-[40px]">
+                                                      <div 
+                                                          :class="getCategoryBarColor(category.obtained_points || 0, category.total_possible_points || 1)"
+                                                          class="h-1.5 rounded-full transition-all duration-300"
+                                                          :style="{ width: getCategoryPercentage(category.obtained_points || 0, category.total_possible_points || 1) + '%' }"
+                                                      ></div>
+                                                  </div>
+                                              </div>
+                                              <div class="text-right ml-2 flex-shrink-0">
+                                                  <div class="font-semibold text-foreground">
+                                                      {{ category.obtained_points || 0 }}/{{ category.total_possible_points || 0 }}
+                                                  </div>
+                                                  <div class="text-muted-foreground">
+                                                      {{ getCategoryPercentage(category.obtained_points || 0, category.total_possible_points || 1) }}%
+                                                  </div>
+                                              </div>
+                                          </div>
+                                          
+                                          <!-- Total general -->
+                                          <div class="pt-2 border-t border-border">
+                                              <div class="flex items-center justify-between text-xs">
+                                                  <div class="flex items-center gap-2 min-w-0 flex-1">
+                                                      <span class="font-bold text-foreground">Total General</span>
+                                                      <div class="flex-1 bg-gray-200 rounded-full h-2 min-w-[40px]">
+                                                          <div 
+                                                              :class="getCategoryBarColor(evaluation.total_score || 0, 100)"
+                                                              class="h-2 rounded-full transition-all duration-300"
+                                                              :style="{ width: (evaluation.total_percentage || 0) + '%' }"
+                                                          ></div>
+                                                      </div>
+                                                  </div>
+                                                  <div class="text-right ml-2 flex-shrink-0">
+                                                      <div class="font-bold text-foreground">
+                                                          {{ evaluation.total_percentage || 0 }}%
+                                                      </div>
+                                                  </div>
+                                              </div>
+                                          </div>
+                                      </div>
+                                      <div v-else class="text-xs text-muted-foreground">
+                                          Sin datos de categorías
+                                      </div>
+                                  </div>
                                 
                                 <!-- Acciones (solo desktop) -->
                                 <div class="hidden md:flex md:gap-1">
@@ -678,4 +746,6 @@ const downloadPdf = (evaluationId: number) => {
         </Teleport>
     </AppLayout>
 </template>
+
+
 

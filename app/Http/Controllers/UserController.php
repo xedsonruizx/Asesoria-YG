@@ -8,6 +8,7 @@ use App\Models\User;
 use Spatie\Permission\Models\Role;
 use App\Models\EvaluationAnswer;
 use App\Models\EvaluationQuestion;
+use Illuminate\Support\Facades\Log;
 
 class UserController extends Controller
 {

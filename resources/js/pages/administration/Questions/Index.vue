@@ -760,14 +760,7 @@ const getDependencyInfo = (question: Question) => {
                 <!-- Acciones -->
                 <div class="col-span-2">
                   <div class="flex items-center gap-1">
-                    <button
-                      v-if="!question.deleted_at"
-                      @click="openEditModal(question)"
-                      class="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors border border-input"
-                      title="Editar"
-                    >
-                      <Edit class="h-4 w-4" />
-                    </button>
+                 
                     
                     <button
                       v-if="!question.deleted_at"
@@ -781,6 +774,14 @@ const getDependencyInfo = (question: Question) => {
                       :title="question.is_active ? 'Desactivar' : 'Activar'"
                     >
                       <component :is="question.is_active ? PowerOff : Power" class="h-4 w-4" />
+                    </button>
+                       <button
+                      v-if="!question.deleted_at"
+                      @click="openEditModal(question)"
+                      class="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors border border-input"
+                      title="Editar"
+                    >
+                      <Edit class="h-4 w-4" />
                     </button>
 
                     <button

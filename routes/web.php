@@ -12,6 +12,7 @@ use App\Http\Controllers\EvaluationAdminController;
 use App\Http\Controllers\EvaluationQuestionController;
 use App\Http\Controllers\EvaluationCategoryController; // Agregar esta línea
 use App\Http\Controllers\MultaController;
+use App\Http\Middleware\ThrottleAnswers;
 
 // ============================================
 // RUTAS PÚBLICAS (SIN AUTENTICACIÓN)
@@ -29,7 +30,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('evaluacion', [EvaluationController::class, 'index'])->name('evaluacion');
     
     // Rutas de API para evaluaciones
-    Route::post('/evaluation/answer', [EvaluationController::class, 'saveAnswer'])->name('evaluation.answer');
+    Route::post('/evaluation/answer', [EvaluationController::class, 'saveAnswer'])->middleware(['auth', ThrottleAnswers::class]);
     Route::post('/evaluation/submit', [EvaluationController::class, 'submit'])->name('evaluation.submit');
     Route::post('/evaluation/restart', [EvaluationController::class, 'restart'])->name('evaluation.restart');
     Route::get('/evaluation/{evaluation}/report', [EvaluationController::class, 'report'])->name('evaluation.report');
@@ -60,8 +61,13 @@ Route::middleware(['auth'])->group(function () {
         Route::get('api/tags', [TagCategoryController::class, 'apiIndex'])->name('api.tags.index');
         
         // Resource para categorías de posts
+
+        
         Route::resource('post-categories', TagCategoryController::class);
         Route::get('api/post-categories', [TagCategoryController::class, 'apiIndex'])->name('api.post-categories.index');
+        Route::patch('post-categories/{tag}/toggle-status', [TagCategoryController::class, 'toggleStatus'])->name('post-category.toggle-status');
+        Route::patch('post-categories/{id}/restore', [TagCategoryController::class, 'restore'])->name('post-category.restore');
+        Route::delete('post-categories/{id}/force-delete', [TagCategoryController::class, 'forceDelete'])->name('post-category.force-delete');
 
         // Resource para categorías de evaluación
         // MOVER las rutas específicas ANTES del Route::resource
@@ -86,6 +92,7 @@ Route::middleware(['auth'])->group(function () {
         Route::patch('evaluations/{id}/restore', [EvaluationAdminController::class, 'restore'])->name('admin.evaluations.restore');
         Route::delete('evaluations/{id}/force-delete', [EvaluationAdminController::class, 'forceDelete'])->name('admin.evaluations.force-delete');
         Route::get('/evaluations/{id}/pdf', [EvaluationAdminController::class, 'generatePdf'])->name('admin.evaluations.pdf');
+
     
         // Rutas específicas ANTES del resource route
         Route::get('admin/questions/next-order', [EvaluationQuestionController::class, 'getNextOrder'])->name('admin.questions.next-order');
