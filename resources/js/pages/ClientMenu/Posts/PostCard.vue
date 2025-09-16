@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { router } from '@inertiajs/vue3';
-import { Image } from 'lucide-vue-next';
+import { Image, Play } from 'lucide-vue-next';
 
 // Interface para el Post
 interface Post {
@@ -44,12 +44,40 @@ const emit = defineEmits<{
     openSubscriptionModal: [title: string];
 }>();
 
-// Estado para manejar errores de imagen
-const imageErrors = ref<Record<number, boolean>>({});
+// Estado para manejar errores de imagen/video
+const mediaErrors = ref<Record<number, boolean>>({});
 
-// Función para manejar errores de imagen
-const handleImageError = (postId: number) => {
-    imageErrors.value[postId] = true;
+// Computed para obtener la URL completa del archivo
+const mediaUrl = computed(() => {
+    if (!props.post.image_path) return null;
+    // Si ya es una URL completa, devolverla tal como está
+    if (props.post.image_path.startsWith('http')) {
+        return props.post.image_path;
+    }
+    // Si es una ruta relativa, construir la URL completa
+    return `/storage/${props.post.image_path}`;
+});
+
+// Computed para determinar si el archivo es un video
+const isVideo = computed(() => {
+    if (!props.post.image_path) return false;
+    const videoExtensions = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'];
+    const extension = props.post.image_path.split('.').pop()?.toLowerCase();
+    return extension ? videoExtensions.includes(extension) : false;
+});
+
+// Computed para determinar si el archivo es una imagen
+const isImage = computed(() => {
+    if (!props.post.image_path) return false;
+    const imageExtensions = ['jpeg', 'jpg', 'png', 'webp', 'gif'];
+    const extension = props.post.image_path.split('.').pop()?.toLowerCase();
+    return extension ? imageExtensions.includes(extension) : false;
+});
+
+// Función para manejar errores de media
+const handleMediaError = (postId: number) => {
+    mediaErrors.value[postId] = true;
+    console.error(`Error loading media for post ${postId}:`, mediaUrl.value);
 };
 
 // Función para obtener el color de la etiqueta
@@ -74,6 +102,7 @@ const handlePostClick = () => {
     console.log('🔢 Tags count:', props.post.tags?.length || 0);
     console.log('🔒 Premium required:', props.post.is_premium);
     console.log('👤 User is premium:', props.userIsPremium);
+    console.log('🖼️ Media URL:', mediaUrl.value);
 
     
     if (props.post.is_premium && !props.userIsPremium) {
@@ -88,7 +117,7 @@ const handlePostClick = () => {
     router.visit(url);
 };
 </script>
-<!-- TODO: Modificar textos para acceso a contenido -->
+
 <template>
     <article 
         class="relative bg-white dark:bg-[#161615] rounded-lg shadow-[inset_0px_0px_0px_1px_rgba(26,26,0,0.16)] dark:shadow-[inset_0px_0px_0px_1px_#fffaed2d] overflow-hidden hover:shadow-lg transition-all duration-300 cursor-pointer group"
@@ -122,27 +151,55 @@ const handlePostClick = () => {
             </span>
         </div>
         
-        <!-- Imagen del post -->
+        <!-- Media del post (imagen o video) -->
         <div class="aspect-video bg-gray-200 dark:bg-gray-700 relative overflow-hidden">
-            <!-- Imagen disponible y sin errores -->
-            <img 
-                v-if="post.image_path && !imageErrors[post.id]"
-                :src="post.image_path" 
-                :alt="post.title"
-                class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                @error="handleImageError(post.id)"
-            />
-            
-            <!-- Placeholder cuando hay error de carga -->
-            <div v-else-if="post.image_path && imageErrors[post.id]" class="w-full h-full flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-                <div class="text-center text-gray-400 dark:text-gray-500">
-                    <Image class="h-8 w-8 mx-auto mb-2 opacity-40" />
-                    <p class="text-sm font-medium mb-1">Imagen no disponible</p>
-                    <p class="text-xs opacity-75">Error al cargar la imagen</p>
+            <!-- Video disponible y sin errores -->
+            <div v-if="isVideo && mediaUrl && !mediaErrors[post.id]" class="relative w-full h-full">
+                <video 
+                    :src="mediaUrl" 
+                    class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    muted
+                    preload="metadata"
+                    @error="handleMediaError(post.id)"
+                    @loadstart="console.log('Video loading started:', mediaUrl)"
+                    @loadeddata="console.log('Video loaded successfully:', mediaUrl)"
+                >
+                    Tu navegador no soporta el elemento de video.
+                </video>
+                
+                <!-- Overlay de play para videos -->
+                <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <div class="bg-white bg-opacity-90 rounded-full p-3">
+                        <Play class="h-6 w-6 text-gray-800 fill-current" />
+                    </div>
+                </div>
+                
+                <!-- Indicador de video en la esquina -->
+                <div class="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs font-medium">
+                    VIDEO
                 </div>
             </div>
             
-            <!-- Placeholder cuando no hay imagen -->
+            <!-- Imagen disponible y sin errores -->
+            <img 
+                v-else-if="isImage && mediaUrl && !mediaErrors[post.id]"
+                :src="mediaUrl" 
+                :alt="post.title"
+                class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                @error="handleMediaError(post.id)"
+                @load="console.log('Image loaded successfully:', mediaUrl)"
+            />
+            
+            <!-- Placeholder cuando hay error de carga -->
+            <div v-else-if="mediaUrl && mediaErrors[post.id]" class="w-full h-full flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+                <div class="text-center text-gray-400 dark:text-gray-500">
+                    <Image class="h-8 w-8 mx-auto mb-2 opacity-40" />
+                    <p class="text-sm font-medium mb-1">Media no disponible</p>
+                    <p class="text-xs opacity-75">Error al cargar el contenido</p>
+                </div>
+            </div>
+            
+            <!-- Placeholder cuando no hay imagen/video -->
             <div v-else class="w-full h-full flex items-center justify-center bg-gray-50 dark:bg-gray-900">
                 <div class="text-center text-gray-400 dark:text-gray-500">
                     <Image class="h-8 w-8 mx-auto mb-2 opacity-40" />
@@ -154,7 +211,7 @@ const handlePostClick = () => {
             <!-- Overlay para contenido premium -->
             <div 
                 v-if="post.is_premium && !userIsPremium"
-                class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center"
+                class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20"
             >
                 <div class="text-center text-white">
                     <svg class="w-12 h-12 mx-auto mb-2 opacity-80" fill="currentColor" viewBox="0 0 20 20">

@@ -61,28 +61,41 @@ const handleImageUpload = (event: Event) => {
     const target = event.target as HTMLInputElement;
     const file = target.files?.[0];
     if (file) {
-        // Validar tamaño de imagen (2MB máximo)
-        if (file.size > 2048 * 1024) {
-            alert('La imagen no puede ser mayor a 2MB');
+        // Validar tamaño de archivo (50MB máximo para videos, 5MB para imágenes)
+        const isVideo = file.type.startsWith('video/');
+        const maxSize = isVideo ? 50 * 1024 * 1024 : 5 * 1024 * 1024; // 50MB para videos, 5MB para imágenes
+        
+        if (file.size > maxSize) {
+            const maxSizeText = isVideo ? '50MB' : '5MB';
+            alert(`El archivo no puede ser mayor a ${maxSizeText}`);
             return;
         }
         
         // Validar tipo de archivo
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif'];
+        const allowedTypes = [
+            'image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp',
+            'video/mp4', 'video/avi', 'video/mov', 'video/wmv', 'video/flv', 'video/webm'
+        ];
         if (!allowedTypes.includes(file.type)) {
-            alert('Solo se permiten archivos JPG, PNG y GIF');
+            alert('Solo se permiten archivos de imagen (JPG, PNG, GIF, WEBP) o video (MP4, AVI, MOV, WMV, FLV, WEBM)');
             return;
         }
         
         form.featured_image = file;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            imagePreview.value = e.target?.result as string;
-        };
-        reader.readAsDataURL(file);
+        
+        if (isVideo) {
+            // Para videos, crear un preview básico
+            imagePreview.value = 'video-preview';
+        } else {
+            // Para imágenes, crear preview normal
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.value = e.target?.result as string;
+            };
+            reader.readAsDataURL(file);
+        }
     }
 };
-
 const handleImageDragOver = (event: DragEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -102,25 +115,37 @@ const handleImageDrop = (event: DragEvent) => {
     if (files && files.length > 0) {
         const file = files[0];
         
-        // Validar que sea una imagen
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif'];
+        // Validar que sea una imagen o video
+        const allowedTypes = [
+            'image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp',
+            'video/mp4', 'video/avi', 'video/mov', 'video/wmv', 'video/flv', 'video/webm'
+        ];
         if (!allowedTypes.includes(file.type)) {
-            alert('Solo se permiten archivos JPG, PNG y GIF');
+            alert('Solo se permiten archivos de imagen (JPG, PNG, GIF, WEBP) o video (MP4, AVI, MOV, WMV, FLV, WEBM)');
             return;
         }
         
         // Validar tamaño
-        if (file.size > 2048 * 1024) {
-            alert('La imagen no puede ser mayor a 2MB');
+        const isVideo = file.type.startsWith('video/');
+        const maxSize = isVideo ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
+        
+        if (file.size > maxSize) {
+            const maxSizeText = isVideo ? '50MB' : '5MB';
+            alert(`El archivo no puede ser mayor a ${maxSizeText}`);
             return;
         }
         
         form.featured_image = file;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            imagePreview.value = e.target?.result as string;
-        };
-        reader.readAsDataURL(file);
+        
+        if (isVideo) {
+            imagePreview.value = 'video-preview';
+        } else {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.value = e.target?.result as string;
+            };
+            reader.readAsDataURL(file);
+        }
     }
 };
 
@@ -329,9 +354,9 @@ const publish = () => submitForm('published');
                                     <InputError :message="form.errors.meta_description" />
                                 </div>
 
-                        <!-- Imagen Destacada -->
+                        <!-- Imagen/Video Destacado -->
                             <div class="grid gap-2">
-                                <Label>Imagen Destacada</Label>
+                                <Label>Imagen o Video Destacado</Label>
                                 <div 
                                     class="relative rounded-lg border-2 border-dashed border-input p-6 text-center transition-colors"
                                     :class="{
@@ -347,15 +372,16 @@ const publish = () => submitForm('published');
                                             <ImageIcon class="h-full w-full" />
                                         </div>
                                         <div class="text-sm text-muted-foreground">
-                                            <span class="font-medium text-primary">Haz clic para subir</span> o arrastra una imagen aquí
+                                            <span class="font-medium text-primary">Haz clic para subir</span> o arrastra un archivo aquí
                                         </div>
-                                        <p class="text-xs text-muted-foreground">PNG, JPG, GIF hasta 2MB</p>
+                                        <p class="text-xs text-muted-foreground">Imágenes: PNG, JPG, GIF, WEBP hasta 5MB<br>Videos: MP4, AVI, MOV, WMV, FLV, WEBM hasta 50MB</p>
                                     </div>
                                     
                                     <div v-else class="space-y-2">
-                                        <div class="relative mx-auto h-32 w-32 overflow-hidden rounded-lg">
+                                        <!-- Preview para imágenes -->
+                                        <div v-if="imagePreview && imagePreview !== 'video-preview'" class="relative mx-auto h-32 w-32 overflow-hidden rounded-lg">
                                             <img 
-                                                :src="imagePreview || '/storage/' + props.post.image_path" 
+                                                :src="imagePreview" 
                                                 alt="Preview" 
                                                 class="h-full w-full object-cover"
                                             >
@@ -367,19 +393,35 @@ const publish = () => submitForm('published');
                                                 <X class="h-4 w-4" />
                                             </button>
                                         </div>
-                                        <p class="text-xs text-muted-foreground">{{ form.featured_image?.name || 'Imagen actual' }}</p>
+                                        
+                                        <!-- Preview para videos -->
+                                        <div v-else-if="imagePreview === 'video-preview'" class="relative mx-auto h-32 w-32 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                                            <div class="text-center">
+                                                <Video class="h-8 w-8 mx-auto mb-2 text-gray-500" />
+                                                <p class="text-xs text-gray-500">Video seleccionado</p>
+                                            </div>
+                                            <button
+                                                @click="removeImage"
+                                                type="button"
+                                                class="absolute -right-2 -top-2 rounded-full bg-destructive p-1 text-destructive-foreground hover:bg-destructive/90"
+                                            >
+                                                <X class="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                        
+                                        <p class="text-xs text-muted-foreground">{{ form.featured_image?.name || 'Archivo actual' }}</p>
                                     </div>
                                     
                                     <input 
                                         ref="imageInputRef"
                                         type="file" 
-                                        accept="image/*" 
+                                        accept="image/*,video/*" 
                                         class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                                         @change="handleImageUpload"
                                     >
                                 </div>
-                                <Button  v-if="form.featured_image" type="button" variant="outline" size="sm" @click="removeImage">
-                                        Remover imagen
+                                <Button v-if="form.featured_image" type="button" variant="outline" size="sm" @click="removeImage">
+                                        Remover archivo
                                 </Button>
                                 <InputError :message="form.errors.featured_image" />
                             </div>

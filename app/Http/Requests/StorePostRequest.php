@@ -64,10 +64,9 @@ class StorePostRequest extends FormRequest
             ],
             'featured_image' => [
                 'nullable',
-                'image',
-                'mimes:jpeg,png,jpg,webp',
-                'max:5120',
-                'dimensions:min_width=300,min_height=200,max_width=2000,max_height=2000'
+                'file',
+                'mimes:jpeg,png,jpg,webp,mp4,avi,mov,wmv,flv,webm',
+                'max:51200', // 50MB para videos
             ],
             'file' => [
                 'nullable',
@@ -106,9 +105,9 @@ class StorePostRequest extends FormRequest
             'meta_description.required' => 'La meta descripción es obligatoria.',
             'meta_description.min' => 'La meta descripción debe tener al menos 50 caracteres.',
             'meta_description.max' => 'La meta descripción no puede exceder 160 caracteres.',
-            'featured_image.image' => 'El archivo debe ser una imagen válida.',
-            'featured_image.mimes' => 'La imagen debe ser de tipo: jpeg, png, jpg o webp.',
-            'featured_image.max' => 'La imagen no puede ser mayor a 5MB.',
+            'featured_image.file' => 'El archivo debe ser válido.',
+            'featured_image.mimes' => 'El archivo debe ser de tipo: jpeg, png, jpg, webp, mp4, avi, mov, wmv, flv o webm.',
+            'featured_image.max' => 'El archivo no puede ser mayor a 50MB.',
             'featured_image.dimensions' => 'La imagen debe tener entre 300x200 y 2000x2000 píxeles.',
             'file.mimes' => 'El archivo debe ser de tipo: pdf, doc, docx, txt, zip o rar.',
             'file.max' => 'El archivo no puede ser mayor a 20MB.',

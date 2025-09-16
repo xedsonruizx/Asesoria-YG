@@ -121,19 +121,30 @@ class PostController extends Controller
         // Crear un slug único para la carpeta basado en el título
         $postSlug = Str::slug($validated['title']) . '-' . time();
         
-        // Manejar subida de imagen
+        // Manejar subida de imagen o video
         if ($request->hasFile('featured_image')) {
-            $imageFile = $request->file('featured_image');
-            $imageExtension = $imageFile->getClientOriginalExtension();
-            $imageName = 'imagen-principal.' . $imageExtension;
+            $mediaFile = $request->file('featured_image');
+            $mediaExtension = $mediaFile->getClientOriginalExtension();
             
-            $imagePath = $imageFile->storeAs(
+            // Determinar si es imagen o video
+            $imageExtensions = ['jpeg', 'jpg', 'png', 'webp', 'gif'];
+            $videoExtensions = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'];
+            
+            if (in_array(strtolower($mediaExtension), $imageExtensions)) {
+                $mediaName = 'imagen-principal.' . $mediaExtension;
+            } elseif (in_array(strtolower($mediaExtension), $videoExtensions)) {
+                $mediaName = 'video-principal.' . $mediaExtension;
+            } else {
+                $mediaName = 'media-principal.' . $mediaExtension;
+            }
+            
+            $mediaPath = $mediaFile->storeAs(
                 'posts/' . $postSlug, 
-                $imageName, 
+                $mediaName, 
                 'public'
             );
             
-            $validated['image_path'] = $imagePath;
+            $validated['image_path'] = $mediaPath;
         }
     
         // Manejar subida de archivo
@@ -429,5 +440,135 @@ class PostController extends Controller
             Log::error('Error al cambiar estado de post: ' . $e->getMessage());
             return back()->withErrors(['error' => 'Error al cambiar el estado del post.']);
         }
+    }
+
+    /**
+     * Update post with file handling (for multipart form data)
+     */
+    public function updateWithFiles(UpdatePostRequest $request, Post $post)
+    {
+        Log::info("updateWithFiles method called");
+        Log::info('=== UPDATE WITH FILES METHOD CALLED ===', [
+            'method' => $request->method(),
+            'url' => $request->url(),
+            'content_type' => $request->header('Content-Type'),
+            'has_files' => [
+                'featured_image' => $request->hasFile('featured_image'),
+                'file' => $request->hasFile('file')
+            ],
+            'all_data' => $request->all()
+        ]);
+        
+        $validated = $request->validated();
+        
+        // Crear un slug único para la carpeta basado en el título si es necesario
+        $postSlug = $post->slug ?? (Str::slug($validated['title']) . '-' . time());
+        
+        // Manejar imagen/video destacado
+        if ($request->hasFile('featured_image')) {
+            // Eliminar archivo anterior si existe
+            if ($post->image_path) {
+                Storage::disk('public')->delete($post->image_path);
+            }
+            
+            $mediaFile = $request->file('featured_image');
+            $mediaExtension = $mediaFile->getClientOriginalExtension();
+            
+            // Determinar si es imagen o video
+            $imageExtensions = ['jpeg', 'jpg', 'png', 'webp', 'gif'];
+            $videoExtensions = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'];
+            
+            if (in_array(strtolower($mediaExtension), $imageExtensions)) {
+                $mediaName = 'imagen-principal.' . $mediaExtension;
+            } elseif (in_array(strtolower($mediaExtension), $videoExtensions)) {
+                $mediaName = 'video-principal.' . $mediaExtension;
+            } else {
+                $mediaName = 'media-principal.' . $mediaExtension;
+            }
+            
+            $mediaPath = $mediaFile->storeAs(
+                'posts/' . $postSlug, 
+                $mediaName, 
+                'public'
+            );
+            
+            $validated['image_path'] = $mediaPath;
+        } elseif ($request->input('remove_featured_image') === 'true') {
+            // Si se marca para eliminar la imagen/video
+            if ($post->image_path) {
+                Storage::disk('public')->delete($post->image_path);
+                $validated['image_path'] = null;
+            }
+        } else {
+            // Mantener la imagen/video existente
+            $validated['image_path'] = $post->image_path;
+        }
+    
+        // Manejar archivo adjunto
+        if ($request->hasFile('file')) {
+            // Eliminar archivo anterior si existe
+            if ($post->file_path) {
+                Storage::disk('public')->delete($post->file_path);
+            }
+            
+            $file = $request->file('file');
+            $originalName = $file->getClientOriginalName();
+            $fileExtension = $file->getClientOriginalExtension();
+            
+            $cleanFileName = Str::slug(pathinfo($originalName, PATHINFO_FILENAME)) . '.' . $fileExtension;
+            
+            $filePath = $file->storeAs(
+                'posts/' . $postSlug, 
+                $cleanFileName, 
+                'public'
+            );
+            
+            $validated['file_path'] = $filePath;
+        } elseif ($request->input('remove_file') === 'true') {
+            // Si se marca para eliminar el archivo
+            if ($post->file_path) {
+                Storage::disk('public')->delete($post->file_path);
+                $validated['file_path'] = null;
+            }
+        } else {
+            // Mantener el archivo existente
+            $validated['file_path'] = $post->file_path;
+        }
+
+        // Determinar el valor de published_at
+        $publishedAt = null;
+        if ($validated['status'] === 'published') {
+            if (isset($validated['published_at'])) {
+                $publishedAt = Carbon::parse($validated['published_at'])->format('Y-m-d H:i:s');
+            } elseif ($post->published_at) {
+                $publishedAt = $post->published_at;
+            } else {
+                $publishedAt = now()->format('Y-m-d H:i:s');
+            }
+        }
+
+        // Actualizar el post
+        $updateData = [
+            'title' => $validated['title'],
+            'content' => $validated['content'],
+            'excerpt' => $validated['excerpt'] ?? $post->excerpt,
+            'slug' => $validated['slug'],
+            'meta_description' => $validated['meta_description'],
+            'status' => $validated['status'],
+            'is_premium' => $validated['is_premium'] ?? false,
+            'image_path' => $validated['image_path'],
+            'file_path' => $validated['file_path'],
+            'published_at' => $publishedAt
+        ];
+        
+        $post->update($updateData);
+    
+        // Sincronizar tag categories
+        if (isset($validated['tag_categories'])) {
+            $post->tagCategories()->sync($validated['tag_categories']);
+        }
+    
+        return redirect()->route('posts.admin')
+            ->with('success', 'Post actualizado exitosamente.');
     }
 }

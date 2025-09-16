@@ -68,10 +68,9 @@ class UpdatePostRequest extends FormRequest
             ],
             'featured_image' => [
                 'nullable',
-                'image',
-                'mimes:jpeg,png,jpg,webp',
-                'max:5120',
-                'dimensions:min_width=300,min_height=200,max_width=2000,max_height=2000'
+                'file',
+                'mimes:jpeg,png,jpg,webp,mp4,avi,mov,wmv,flv,webm',
+                'max:51200', // 50MB para videos
             ],
             'file' => [
                 'nullable',

@@ -198,8 +198,20 @@ const fileUrl = computed(() => {
                         </div>
                     </div>
 
+                    <!-- Video principal -->
+                    <div v-if="imageUrl && imageType === 'video'" class="bg-card rounded-lg overflow-hidden shadow-sm border border-border">
+                        <video 
+                            :src="imageUrl" 
+                            controls
+                            class="w-full h-auto max-h-96"
+                            preload="metadata"
+                        >
+                            Tu navegador no soporta el elemento de video.
+                        </video>
+                    </div>
+
                     <!-- Imagen principal -->
-                    <div v-if="imageUrl && imageType === 'image'" class="bg-card rounded-lg overflow-hidden shadow-sm border border-border">
+                    <div v-else-if="imageUrl && imageType === 'image'" class="bg-card rounded-lg overflow-hidden shadow-sm border border-border">
                         <div class="relative">
                             <!-- Imagen real -->
                             <img 
@@ -225,27 +237,15 @@ const fileUrl = computed(() => {
                         </div>
                     </div>
 
-                    <!-- Placeholder cuando no hay imagen -->
+                    <!-- Placeholder cuando no hay imagen ni video -->
                     <div v-else-if="!imageUrl" class="bg-card rounded-lg overflow-hidden shadow-sm border border-border">
                         <div class="w-full h-64 flex items-center justify-center bg-gray-50 dark:bg-gray-900 border-2 border-dashed border-gray-300 dark:border-gray-600">
                             <div class="text-center text-gray-400 dark:text-gray-500">
                                 <Image class="h-12 w-12 mx-auto mb-3 opacity-40" />
-                                <p class="text-base font-medium mb-1">Sin imagen</p>
-                                <p class="text-sm opacity-75">Esta publicación no tiene imagen</p>
+                                <p class="text-base font-medium mb-1">Sin multimedia</p>
+                                <p class="text-sm opacity-75">Esta publicación no tiene imagen o video</p>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Video principal -->
-                    <div v-if="imageUrl && imageType === 'video'" class="bg-card rounded-lg overflow-hidden shadow-sm border border-border">
-                        <video 
-                            :src="imageUrl" 
-                            controls
-                            class="w-full h-auto max-h-96"
-                            preload="metadata"
-                        >
-                            Tu navegador no soporta el elemento de video.
-                        </video>
                     </div>
 
                     <!-- Contenido del post -->
