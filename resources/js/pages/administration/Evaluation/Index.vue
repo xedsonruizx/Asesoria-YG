@@ -500,11 +500,11 @@ const downloadPdf = (evaluationId: number) => {
                                         </div>
                                         
                                         <!-- Puntuación por categorías en móvil -->
-                                        <div v-if="evaluation.category_details && evaluation.category_details.length > 0" class="space-y-2">
+                                        <div v-if="evaluation.category_details && evaluation.category_details.filter(cat => cat.obtained_points > 0 || cat.total_possible_points > 0).length > 0" class="space-y-2">
                                             <div class="text-xs text-muted-foreground font-medium">Puntuación por Categoría:</div>
                                             <div class="space-y-2">
                                                 <div 
-                                                    v-for="category in evaluation.category_details" 
+                                                    v-for="category in evaluation.category_details.filter(cat => cat.obtained_points > 0 || cat.total_possible_points > 0)" 
                                                     :key="category.slug"
                                                     class="flex items-center justify-between text-xs"
                                                 >
@@ -583,9 +583,9 @@ const downloadPdf = (evaluationId: number) => {
                                 <!-- Puntuación por categorías (solo desktop) -->
                              <!-- Puntuación por Categoría -->
                                   <div class="hidden md:block">
-                                      <div v-if="evaluation.category_details && evaluation.category_details.length > 0" class="space-y-2">
+                                      <div v-if="evaluation.category_details && evaluation.category_details.filter(cat => cat.obtained_points > 0 || cat.total_possible_points > 0).length > 0" class="space-y-2">
                                           <div 
-                                              v-for="category in evaluation.category_details" 
+                                              v-for="category in evaluation.category_details.filter(cat => cat.obtained_points > 0 || cat.total_possible_points > 0)" 
                                               :key="category.slug"
                                               class="flex items-center justify-between text-xs"
                                           >
@@ -633,7 +633,7 @@ const downloadPdf = (evaluationId: number) => {
                                           </div>
                                       </div>
                                       <div v-else class="text-xs text-muted-foreground">
-                                          Sin datos de categorías
+                                          Sin categorías con respuestas
                                       </div>
                                   </div>
                                 
