@@ -48,7 +48,12 @@ class Carpeta extends Model
     // Relación subcarpetas recursiva (para obtener toda la jerarquía)
     public function subcarpetasRecursivas()
     {
-        return $this->subcarpetas()->with('subcarpetasRecursivas');
+        return $this->subcarpetas()->with([
+            'subcarpetasRecursivas',
+            'bibliotecas' => function ($query) {
+                $query->whereNull('deleted_at')->orderBy('orden');
+            }
+        ]);
     }
 
     // Relación con elementos de biblioteca
@@ -216,7 +221,14 @@ class Carpeta extends Model
     // Obtener árbol jerárquico completo
     public static function getArbolJerarquico()
     {
-        return static::with('subcarpetasRecursivas')
+        return static::with([
+                'subcarpetasRecursivas.bibliotecas' => function ($query) {
+                    $query->whereNull('deleted_at')->orderBy('orden');
+                },
+                'bibliotecas' => function ($query) {
+                    $query->whereNull('deleted_at')->orderBy('orden');
+                }
+            ])
             ->raiz()
             ->activas()
             ->ordenadas()

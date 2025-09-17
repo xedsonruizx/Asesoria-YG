@@ -212,7 +212,7 @@ watch([() => props.show, () => props.biblioteca], ([show, biblioteca]) => {
           </div>
 
           <!-- Slug -->
-          <div>
+          <div hidden>
             <label class="block text-sm font-medium text-foreground mb-2">
               Slug *
             </label>

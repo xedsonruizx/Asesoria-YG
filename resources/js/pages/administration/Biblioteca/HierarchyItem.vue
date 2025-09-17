@@ -201,18 +201,28 @@ const getStatusColor = () => {
           <FolderPlus class="h-3 w-3 text-primary" />
         </Button>
 
-        <!-- Botón para eliminar -->
+        <!-- Botón para eliminar (solo carpetas, no elementos de biblioteca) -->
         <Button
+          v-if="item.type === 'carpeta'"
           variant="ghost"
           size="sm"
           class="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
           @click="deleteItem"
-          title="Eliminar"
+          title="Eliminar carpeta"
         >
           <Trash2 class="h-3 w-3" />
         </Button>
+        
+        <!-- Indicador visual para elementos de biblioteca (solo lectura) -->
+        <div 
+          v-if="item.type === 'biblioteca'"
+          class="text-xs text-muted-foreground px-2 py-1 bg-muted/30 rounded"
+          title="Elemento de biblioteca (solo lectura)"
+        >
+          Solo lectura
+        </div>
       </div>
-    </div>
+      </div>
 
     <!-- Formulario de nueva subcarpeta -->
     <div 
