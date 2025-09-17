@@ -312,6 +312,21 @@ const truncateText = (text: string, maxLength: number) => {
   return text.substring(0, maxLength) + '...';
 };
 
+// Función para limpiar HTML tags y estilos
+const stripHtml = (html: string) => {
+  if (!html) return '';
+  // Crear un elemento temporal para extraer solo el texto
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  return temp.textContent || temp.innerText || '';
+};
+
+// Función combinada para limpiar HTML y truncar
+const cleanAndTruncateText = (text: string, maxLength: number) => {
+  const cleanText = stripHtml(text || '');
+  return truncateText(cleanText || 'Sin descripción', maxLength);
+};
+
 // Función para obtener información de dependencias
 const getDependencyInfo = (biblioteca: Biblioteca) => {
   const dependencies = [];
@@ -326,6 +341,15 @@ const getDependencyInfo = (biblioteca: Biblioteca) => {
     canDelete = false;
   }
   
+  // Si está asociado a una carpeta
+  if (biblioteca.carpeta_id) {
+    dependencies.push({
+      text: `${biblioteca.carpeta?.nombre || 'Carpeta'}`,
+      class: 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300'
+    });
+    // La asociación a carpeta no impide eliminación, solo es informativa
+  }
+  
   if (dependencies.length === 0) {
     return {
       text: 'Sin dependencias',
@@ -334,8 +358,8 @@ const getDependencyInfo = (biblioteca: Biblioteca) => {
     };
   } else {
     return {
-      text: dependencies[0].text,
-      class: dependencies[0].class,
+      text: dependencies.map(d => d.text).join(', '),
+      class: dependencies[0].class, // Usar la clase del primer tipo de dependencia
       canDelete
     };
   }
@@ -523,30 +547,28 @@ const getDependencyInfo = (biblioteca: Biblioteca) => {
         <div v-if="props.biblioteca?.data && props.biblioteca.data.length > 0">
           <!-- Encabezados -->
           <div class="bg-muted/30 p-4 border-b border-border">
-            <div class="grid grid-cols-1 md:grid-cols-8 gap-4 font-semibold text-foreground">
+            <div class="grid grid-cols-1 md:grid-cols-7 gap-4 font-semibold text-foreground">
               <div class="md:col-span-2">Elemento</div>
               <div class="md:col-span-2">Descripción</div>
               <div class="hidden md:block">Tipo</div>
-              <div class="hidden md:block">Hijos</div>
-              <div class="hidden md:block">Dependencias</div>
+              <div class="hidden md:block">Carpeta</div>
               <div class="hidden md:block text-center">Acciones</div>
             </div>
           </div>
           
           <!-- Filas de datos -->
-          <div>
-            <div 
-              v-for="elemento in props.biblioteca.data" 
-              :key="elemento.id"
-              :class="[
-                'border-b border-border p-4 hover:bg-muted/50 transition-colors group',
-                elemento.deleted_at ? 'bg-red-50 dark:bg-red-900/10' : ''
-              ]"
-            >
-              <div class="grid grid-cols-1 md:grid-cols-8 gap-4 items-start md:items-center">
-                <!-- Elemento -->
-                <div class="md:col-span-2 cursor-pointer">
-                  <div class="flex items-center gap-3 mb-1">
+            <div>
+              <div 
+                v-for="elemento in props.biblioteca.data" 
+                :key="elemento.id"
+                :class="[
+                  'p-4 border-b border-border last:border-b-0 hover:bg-muted/50 transition-colors',
+                  'grid grid-cols-1 md:grid-cols-7 gap-4 items-start'
+                ]"
+              >
+                <!-- Elemento principal -->
+                <div class="md:col-span-2">
+                  <div class="flex items-start gap-3 group">
                     <BookOpen class="w-4 h-4 text-muted-foreground flex-shrink-0" />
                     <div class="font-semibold text-foreground group-hover:text-primary transition-colors">
                       {{ elemento.titulo }}
@@ -555,7 +577,7 @@ const getDependencyInfo = (biblioteca: Biblioteca) => {
                       Eliminado
                     </div>
                   </div>
-                  <div class="text-sm text-muted-foreground ml-7">{{ elemento.slug }}</div>
+                  <!-- <div class="text-sm text-muted-foreground ml-7">{{ elemento.slug }}</div> -->
                   <div v-if="elemento.padre" class="text-xs text-muted-foreground ml-7 mt-1">
                     Padre: {{ elemento.padre.titulo }}
                   </div>
@@ -563,7 +585,10 @@ const getDependencyInfo = (biblioteca: Biblioteca) => {
                   <!-- Información adicional en móvil -->
                   <div class="md:hidden mt-2 space-y-1">
                     <div class="text-sm text-muted-foreground">
-                      <strong>Descripción:</strong> {{ truncateText(elemento.descripcion || 'Sin descripción', 60) }}
+                      <!-- <strong>Descripción:</strong>  -->
+                      <span class="overflow-hidden text-ellipsis whitespace-nowrap inline-block max-w-full" :title="stripHtml(elemento.descripcion)">
+                        {{ cleanAndTruncateText(elemento.descripcion, 60) }}
+                      </span>
                     </div>
                     <div class="text-sm text-muted-foreground flex items-center gap-2">
                       <strong>Tipo:</strong> 
@@ -576,13 +601,6 @@ const getDependencyInfo = (biblioteca: Biblioteca) => {
                         {{ getTypeLabel(elemento.is_premium) }}
                       </span>
                     </div>
-                    <div class="text-sm text-muted-foreground flex items-center gap-2">
-                      <strong>Hijos:</strong> 
-                      <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
-                        <Users class="h-3 w-3 mr-1" />
-                        {{ elemento.hijos_count }}
-                      </span>
-                    </div>
                     <div class="text-sm text-muted-foreground">
                       <strong>Creado:</strong> {{ formatDate(elemento.created_at) }}
                     </div>
@@ -591,8 +609,8 @@ const getDependencyInfo = (biblioteca: Biblioteca) => {
                 
                 <!-- Descripción (solo desktop) -->
                 <div class="hidden md:block md:col-span-2">
-                  <div class="text-sm text-foreground" :title="elemento.descripcion">
-                    {{ truncateText(elemento.descripcion || 'Sin descripción', 80) }}
+                  <div class="text-sm text-foreground overflow-hidden text-ellipsis whitespace-nowrap" :title="stripHtml(elemento.descripcion)">
+                    {{ cleanAndTruncateText(elemento.descripcion, 80) }}
                   </div>
                 </div>
                 
@@ -608,22 +626,13 @@ const getDependencyInfo = (biblioteca: Biblioteca) => {
                   </span>
                 </div>
                 
-                <!-- Hijos Count (solo desktop) -->
+                <!-- Carpeta (solo desktop) -->
                 <div class="hidden md:block">
-                  <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
-                    <Users class="h-3 w-3 mr-1" />
-                    {{ elemento.hijos_count }}
+                  <span v-if="elemento.carpeta" class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300">
+                    <Folder class="h-3 w-3 mr-1" />
+                    {{ elemento.carpeta.nombre }}
                   </span>
-                </div>
-                
-                <!-- Dependencias (solo desktop) -->
-                <div class="hidden md:block">
-                  <span :class="[
-                    'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
-                    getDependencyInfo(elemento).class
-                  ]">
-                    {{ getDependencyInfo(elemento).text }}
-                  </span>
+                  <span v-else class="text-xs text-muted-foreground">Sin carpeta</span>
                 </div>
               
                 <!-- Acciones (solo desktop) -->
@@ -722,8 +731,8 @@ const getDependencyInfo = (biblioteca: Biblioteca) => {
                 </div>
               </div>
             </div>
-          </div>
         </div>
+      
         
         <!-- Estado vacío -->
         <div v-else class="p-8 text-center">

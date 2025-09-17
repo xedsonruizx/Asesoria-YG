@@ -201,21 +201,21 @@ class BibliotecaController extends Controller
             return redirect()->back()
                 ->with('error', 'No se puede eliminar un elemento que tiene elementos hijos en la biblioteca');
         }
-
-        // Verificar si hay otras bibliotecas que dependen de la misma carpeta
+    
+        // Si está asociado a una carpeta, verificar si hay otros elementos en la misma carpeta
         if ($biblioteca->carpeta_id) {
             $otrasEnMismaCarpeta = Biblioteca::where('carpeta_id', $biblioteca->carpeta_id)
                 ->where('id', '!=', $biblioteca->id)
                 ->exists();
             
             if (!$otrasEnMismaCarpeta) {
-                // Si es el único elemento en esta carpeta, podemos proceder
-                // La carpeta quedará sin elementos de biblioteca asociados
+                // Opcional: Notificar que la carpeta quedará sin elementos asociados
+                session()->flash('info', 'La carpeta asociada quedará sin elementos de biblioteca después de esta eliminación.');
             }
         }
-
+    
         $biblioteca->delete();
-
+    
         return redirect()->route('admin.biblioteca.index')
             ->with('success', 'Elemento de biblioteca eliminado exitosamente');
     }
@@ -227,6 +227,7 @@ class BibliotecaController extends Controller
     {
         $biblioteca = Biblioteca::with(['padre', 'carpeta'])
             ->withTrashed()
+            ->withCount('hijos') // Agregar conteo de hijos
             ->orderBy('orden')
             ->paginate(20);
 
