@@ -70,10 +70,26 @@ class User extends Authenticatable
     }
 
     /**
+     * Relación con compras
+     */
+    public function purchases()
+    {
+        return $this->hasMany(Purchase::class);
+    }
+
+    /**
      * Relación con pagos
      */
     public function payments()
     {
         return $this->hasMany(Payment::class);
+    }
+
+    /**
+     * Obtener compras activas del usuario
+     */
+    public function activePurchases()
+    {
+        return $this->purchases()->where('status', Purchase::STATUS_ACTIVE);
     }
 }

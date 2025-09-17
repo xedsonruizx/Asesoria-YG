@@ -12,6 +12,9 @@ use App\Http\Controllers\EvaluationAdminController;
 use App\Http\Controllers\EvaluationQuestionController;
 use App\Http\Controllers\EvaluationCategoryController; // Agregar esta línea
 use App\Http\Controllers\MultaController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\PurchaseController;
+use App\Http\Controllers\ServiceController;
 use App\Http\Middleware\ThrottleAnswers;
 
 // ============================================
@@ -30,7 +33,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('evaluacion', [EvaluationController::class, 'index'])->name('evaluacion');
     
     // Rutas de API para evaluaciones
-    Route::post('/evaluation/answer', [EvaluationController::class, 'saveAnswer'])->middleware(['auth', ThrottleAnswers::class]);
+    Route::post('/evaluation/answer', [EvaluationController::class, 'saveAnswer'])->middleware(['auth']);
     Route::post('/evaluation/submit', [EvaluationController::class, 'submit'])->name('evaluation.submit');
     Route::post('/evaluation/restart', [EvaluationController::class, 'restart'])->name('evaluation.restart');
     Route::get('/evaluation/{evaluation}/report', [EvaluationController::class, 'report'])->name('evaluation.report');
@@ -127,6 +130,32 @@ Route::middleware(['auth'])->group(function () {
     });
 });
 
+// Rutas de servicios y pagos (requieren autenticación)
+Route::middleware(['auth'])->group(function () {
+    // Rutas públicas de servicios (dentro de auth para acceso completo)
+    Route::get('/services', [ServiceController::class, 'index'])->name('services.index');
+    Route::get('/services/{service}', [ServiceController::class, 'show'])->name('services.show');
+    
+    // Rutas de compras
+    Route::prefix('purchases')->name('purchases.')->group(function () {
+        Route::get('/', [PurchaseController::class, 'index'])->name('index');
+        Route::post('/', [PurchaseController::class, 'store'])->name('store');
+        Route::get('/{purchase}', [PurchaseController::class, 'show'])->name('show');
+    });
+    
+    // Rutas de pagos
+    Route::prefix('payments')->name('payments.')->group(function () {
+        Route::get('/', [PaymentController::class, 'index'])->name('index');
+        Route::get('/return', [PaymentController::class, 'return'])->name('return');
+        Route::get('/stats', [PaymentController::class, 'stats'])->name('stats');
+        Route::get('/success/{payment}', [PaymentController::class, 'success'])->name('success');
+        Route::get('/failed/{payment}', [PaymentController::class, 'failed'])->name('failed');
+        Route::post('/{payment}/retry', [PaymentController::class, 'retry'])->name('retry');
+        Route::post('/{payment}/cancel', [PaymentController::class, 'cancel'])->name('cancel');
+        Route::get('/{payment}/receipt', [PaymentController::class, 'downloadReceipt'])->name('receipt');
+        Route::get('/{payment}', [PaymentController::class, 'show'])->name('show');
+    });
+});
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';
 
