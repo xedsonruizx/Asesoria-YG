@@ -85,12 +85,10 @@ const loadAvailableMultas = async () => {
     availableMultas.value = [];
     
     // Agregar un fallback para debugging
-    console.log('Intentando cargar multas desde el endpoint alternativo...');
     try {
       // Intentar con el endpoint directo del controlador
       const fallbackResponse = await fetch('/multas');
       if (fallbackResponse.ok) {
-        console.log('Endpoint /multas funciona, pero necesita configuración API');
       }
     } catch (fallbackError) {
       console.error('Fallback también falló:', fallbackError);

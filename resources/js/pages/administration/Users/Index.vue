@@ -92,7 +92,6 @@ const closeDeleteModal = () => {
 const handleDeleteConfirm = (userId: number) => {
   router.delete(users.destroy(userId).url, {
     onSuccess: () => {
-      console.log('Usuario eliminado exitosamente');
       closeDeleteModal();
     },
     onError: (errors) => {

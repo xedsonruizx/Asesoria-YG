@@ -23,7 +23,6 @@ const emit = defineEmits<{
 
 // Función para cerrar el modal
 const closeModal = () => {
-    console.log('❌ Closing modal...');
     emit('close');
 };
 

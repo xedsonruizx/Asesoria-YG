@@ -111,7 +111,6 @@ const handleDeleteConfirm = async () => {
     try {
         router.delete(`/users/${props.user.id}`, {
             onSuccess: () => {
-                console.log('Usuario eliminado exitosamente');
                 showDeleteModal.value = false;
             },
             onError: (errors) => {

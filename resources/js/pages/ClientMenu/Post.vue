@@ -111,15 +111,11 @@ const formatDate = (dateString: string) => {
 
 // Función para manejar clic en post
 const handlePostClick = (post: Post) => {
-    console.log('🔍 Post clicked:', post.title);
-    console.log('🔒 Premium required:', post.is_premium);
-    console.log('👤 User is premium:', userIsPremium.value);
-    console.log('🔑 User is premium:', props.auth?.user?.ispremium);
+
 
     
     if (post.is_premium && !userIsPremium.value) {
         // Mostrar modal de suscripción si el post es premium y el usuario no lo es
-        console.log('✅ Opening subscription modal...');
         openSubscriptionModal(post.title);
         return;
     }
@@ -132,7 +128,6 @@ const handlePostClick = (post: Post) => {
 const openPost = (post: Post) => {
     // Verificar si el post es premium y el usuario no tiene suscripción
     if (post.is_premium && !userIsPremium.value) {
-        console.log('✅ Opening subscription modal...');
         openSubscriptionModal(post.title);
         return;
     }

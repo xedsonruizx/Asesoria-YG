@@ -296,7 +296,6 @@ const saveAnswer = (questionId: number, value: any) => {
     }
     
     saveAnswersToStorage(answers.value, showResults.value);
-    console.log(`💾 Respuesta guardada localmente para pregunta ${questionId}`);
 };
 
 const saveDraft = () => {
@@ -324,7 +323,6 @@ const completeEvaluation = async () => {
             )
         );
         
-        console.log(`📤 Enviando ${Object.keys(visibleAnswers).length} respuestas al servidor...`);
         
         const response = await axios.post('/evaluation/submit', {
             evaluation_id: evaluation.value.id,
@@ -438,7 +436,6 @@ onMounted(() => {
     cleanupDeletedQuestions();
     setupAutoSave(answers, showResults);
     window.addEventListener('beforeunload', handleBeforeUnload);
-    console.log('📱 Modo offline activado - respuestas se guardan solo localmente');
 });
 
 onUnmounted(() => {
@@ -446,7 +443,6 @@ onUnmounted(() => {
     
     if (hasUnsavedChanges.value) {
         saveAnswersToStorage(answers.value, showResults.value);
-        console.log('💾 Respuestas guardadas en localStorage antes de salir');
     }
 });
 </script>

@@ -63,7 +63,6 @@ const getOptionsArray = computed(() => {
         typeof options[0] === 'object' && 
         'text' in options[0]) {
         const result = options as Array<{text: string, points: number}>;
-        // console.log('Parsed options for question', props.question.id, ':', result);
         return result;
     }
     
@@ -73,7 +72,6 @@ const getOptionsArray = computed(() => {
             text: typeof option === 'string' ? option : String(option),
             points: 0
         }));
-        console.log('Converted string options for question', props.question.id, ':', result);
         return result;
     }
     
