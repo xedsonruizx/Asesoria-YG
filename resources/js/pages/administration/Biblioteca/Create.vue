@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { router } from '@inertiajs/vue3';
-import { X, BookOpen, Loader2, Lock, Unlock } from 'lucide-vue-next';
+import { X, BookOpen, Loader2, Lock, Unlock, Folder } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import RichTextEditor from '@/components/ui/rich-text-editor/RichTextEditor.vue';
+import axios from 'axios';
 
 // Props
 const props = defineProps<{
@@ -30,6 +31,7 @@ const form = ref({
   slug: '',
   descripcion: '',
   padre_id: null as number | null,
+  carpeta_id: null as number | null,
   is_premium: false,
   orden: 0
 });
@@ -41,6 +43,14 @@ const elementosPadre = ref<Array<{
   id: number;
   titulo: string;
   nivel: number;
+}>>([]);
+
+// Carpetas disponibles (se cargarán del backend)
+const carpetas = ref<Array<{
+  id: number;
+  nombre: string;
+  nivel: number;
+  ruta_completa: string;
 }>>([]);
 
 // Función para generar slug automáticamente
@@ -92,15 +102,26 @@ const createBiblioteca = () => {
   });
 };
 
-// Cargar elementos padre al montar el componente
-const loadElementosPadre = () => {
-  // En una implementación real, esto vendría del backend
-  // Por ahora usamos datos de ejemplo
-  elementosPadre.value = [];
+// Cargar elementos padre y carpetas al montar el componente
+const loadData = async () => {
+  try {
+    const response = await axios.get('/admin/biblioteca/create', {
+      headers: {
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    });
+    elementosPadre.value = response.data.elementosPadre || [];
+    carpetas.value = response.data.carpetas || [];
+  } catch (error) {
+    console.error('Error cargando datos:', error);
+  }
 };
 
-// Cargar elementos padre
-loadElementosPadre();
+// Cargar datos al montar
+onMounted(() => {
+  loadData();
+});
 </script>
 
 <template>
@@ -164,23 +185,28 @@ loadElementosPadre();
             <p v-if="errors.slug" class="mt-1 text-sm text-destructive">{{ errors.slug }}</p>
           </div>
 
-          <!-- Elemento Padre -->
+          <!-- Carpeta Padre -->
           <div>
-            <label class="block text-sm font-medium text-foreground mb-2">
-              Elemento Padre
+            <label class="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+              <Folder class="w-4 h-4" />
+              Carpeta Padre
             </label>
             <select
-              v-model="form.padre_id"
+              v-model="form.carpeta_id"
               class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
-              :class="{ 'border-destructive': errors.padre_id }"
+              :class="{ 'border-destructive': errors.carpeta_id }"
             >
-              <option :value="null">Seleccione</option>
-              <option v-for="elemento in elementosPadre" :key="elemento.id" :value="elemento.id">
-                {{ '—'.repeat(elemento.nivel) }}{{ elemento.nivel > 0 ? ' ' : '' }}{{ elemento.titulo }}
+              <option :value="null">Sin carpeta padre</option>
+              <option v-for="carpeta in carpetas" :key="carpeta.id" :value="carpeta.id">
+                {{ '—'.repeat(carpeta.nivel) }}{{ carpeta.nivel > 0 ? ' ' : '' }}{{ carpeta.nombre }}
               </option>
             </select>
-            <p v-if="errors.padre_id" class="mt-1 text-sm text-destructive">{{ errors.padre_id }}</p>
+            <p class="mt-1 text-xs text-muted-foreground">
+              Selecciona la carpeta donde se organizará este elemento
+            </p>
+            <p v-if="errors.carpeta_id" class="mt-1 text-sm text-destructive">{{ errors.carpeta_id }}</p>
           </div>
+
 
           <!-- Descripción -->
           <div>

@@ -55,7 +55,22 @@ class BibliotecaController extends Controller
      */
     public function create()
     {
+        // Obtener carpetas para el selector de carpeta padre
+        $carpetas = \App\Models\Carpeta::with('subcarpetasRecursivas')
+            ->raiz()
+            ->activas()
+            ->ordenadas()
+            ->get()
+            ->map(function ($carpeta) {
+                return [
+                    'id' => $carpeta->id,
+                    'nombre' => $carpeta->nombre,
+                    'nivel' => $carpeta->nivel,
+                    'ruta_completa' => $carpeta->ruta_completa
+                ];
+            });
 
+        // Obtener elementos de biblioteca para el selector de padre (opcional)
         $elementosPadre = Biblioteca::select('id', 'titulo', 'padre_id')
             ->get()
             ->map(function ($item) {
@@ -67,8 +82,17 @@ class BibliotecaController extends Controller
             })
             ->sortBy('titulo');
 
+        // Si es una solicitud AJAX, devolver JSON
+        if (request()->wantsJson() || request()->ajax()) {
+            return response()->json([
+                'elementosPadre' => $elementosPadre,
+                'carpetas' => $carpetas
+            ]);
+        }
+
         return Inertia::render('Admin/Biblioteca/Create', [
-            'elementosPadre' => $elementosPadre
+            'elementosPadre' => $elementosPadre,
+            'carpetas' => $carpetas
         ]);
     }
 
@@ -77,12 +101,12 @@ class BibliotecaController extends Controller
      */
     public function store(Request $request)
     {
-
         $validated = $request->validate([
             'titulo' => 'required|string|max:255',
             'slug' => 'nullable|string|unique:biblioteca,slug',
             'descripcion' => 'required|string',
             'padre_id' => 'nullable|exists:biblioteca,id',
+            'carpeta_id' => 'nullable|exists:carpetas,id',
             'is_premium' => 'boolean',
             'orden' => 'integer|min:0'
         ]);
@@ -102,7 +126,22 @@ class BibliotecaController extends Controller
      */
     public function edit(Biblioteca $biblioteca)
     {
+        // Obtener carpetas para el selector de carpeta padre
+        $carpetas = \App\Models\Carpeta::with('subcarpetasRecursivas')
+            ->raiz()
+            ->activas()
+            ->ordenadas()
+            ->get()
+            ->map(function ($carpeta) {
+                return [
+                    'id' => $carpeta->id,
+                    'nombre' => $carpeta->nombre,
+                    'nivel' => $carpeta->nivel,
+                    'ruta_completa' => $carpeta->ruta_completa
+                ];
+            });
 
+        // Obtener elementos de biblioteca para el selector de padre (excluyendo el actual)
         $elementosPadre = Biblioteca::where('id', '!=', $biblioteca->id)
             ->select('id', 'titulo', 'padre_id')
             ->get()
@@ -115,9 +154,19 @@ class BibliotecaController extends Controller
             })
             ->sortBy('titulo');
 
+        // Si es una solicitud AJAX, devolver JSON
+        if (request()->wantsJson() || request()->ajax()) {
+            return response()->json([
+                'biblioteca' => $biblioteca->load('carpeta'),
+                'elementosPadre' => $elementosPadre,
+                'carpetas' => $carpetas
+            ]);
+        }
+
         return Inertia::render('Admin/Biblioteca/Edit', [
-            'biblioteca' => $biblioteca,
-            'elementosPadre' => $elementosPadre
+            'biblioteca' => $biblioteca->load('carpeta'),
+            'elementosPadre' => $elementosPadre,
+            'carpetas' => $carpetas
         ]);
     }
 
@@ -126,12 +175,12 @@ class BibliotecaController extends Controller
      */
     public function update(Request $request, Biblioteca $biblioteca)
     {
-
         $validated = $request->validate([
             'titulo' => 'required|string|max:255',
             'slug' => 'required|string|unique:biblioteca,slug,' . $biblioteca->id,
             'descripcion' => 'required|string',
             'padre_id' => 'nullable|exists:biblioteca,id',
+            'carpeta_id' => 'nullable|exists:carpetas,id',
             'is_premium' => 'boolean',
             'orden' => 'integer|min:0'
         ]);
@@ -147,10 +196,22 @@ class BibliotecaController extends Controller
      */
     public function destroy(Biblioteca $biblioteca)
     {
-
+        // Verificar si tiene hijos en la biblioteca
         if ($biblioteca->tieneHijos()) {
             return redirect()->back()
-                ->with('error', 'No se puede eliminar un elemento que tiene hijos');
+                ->with('error', 'No se puede eliminar un elemento que tiene elementos hijos en la biblioteca');
+        }
+
+        // Verificar si hay otras bibliotecas que dependen de la misma carpeta
+        if ($biblioteca->carpeta_id) {
+            $otrasEnMismaCarpeta = Biblioteca::where('carpeta_id', $biblioteca->carpeta_id)
+                ->where('id', '!=', $biblioteca->id)
+                ->exists();
+            
+            if (!$otrasEnMismaCarpeta) {
+                // Si es el único elemento en esta carpeta, podemos proceder
+                // La carpeta quedará sin elementos de biblioteca asociados
+            }
         }
 
         $biblioteca->delete();
@@ -162,16 +223,23 @@ class BibliotecaController extends Controller
     /**
      * Panel de administración
      */
-    public function adminIndex()
+    public function adminIndex(Request $request)
     {
-
-        $biblioteca = Biblioteca::with(['padre'])
+        $biblioteca = Biblioteca::with(['padre', 'carpeta'])
             ->withTrashed()
             ->orderBy('orden')
             ->paginate(20);
 
+        // Obtener carpetas para el modal de jerarquía con la relación correcta
+        $carpetas = \App\Models\Carpeta::with(['subcarpetasRecursivas', 'bibliotecas'])
+            ->raiz()
+            ->activas()
+            ->ordenadas()
+            ->get();
+    
         return Inertia::render('administration/Biblioteca/Index', [
-            'biblioteca' => $biblioteca
+            'biblioteca' => $biblioteca,
+            'carpetas' => $carpetas,
         ]);
     }
 

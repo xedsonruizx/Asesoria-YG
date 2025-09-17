@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\BibliotecaController;
+use App\Http\Controllers\CarpetaController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Http\Controllers\PostController;
@@ -116,6 +117,26 @@ Route::middleware(['auth'])->group(function () {
         // Agregar estas rutas dentro del grupo de administración
         Route::patch('/admin/questions/{id}/restore', [EvaluationQuestionController::class, 'restore'])->name('admin.questions.restore');
         Route::delete('/admin/questions/{id}/force-delete', [EvaluationQuestionController::class, 'forceDelete'])->name('admin.questions.force-delete');
+
+
+
+        // Carpetas (mover dentro del grupo de administración)
+        Route::resource('carpetas', CarpetaController::class)->names([
+            'index' => 'carpetas.index',
+            'create' => 'carpetas.create',
+            'store' => 'carpetas.store',
+            'show' => 'carpetas.show',
+            'edit' => 'carpetas.edit',
+            'update' => 'carpetas.update',
+            'destroy' => 'carpetas.destroy',
+        ]);
+        Route::patch('carpetas/{carpeta}/toggle', [CarpetaController::class, 'toggle'])->name('carpetas.toggle');
+        Route::get('api/carpetas/arbol', [CarpetaController::class, 'arbol'])->name('api.carpetas.arbol');
+
+
+
+
+
     });
     
     // Rutas que requieren permiso 'guest' (solo ver)
@@ -161,6 +182,7 @@ Route::middleware(['auth'])->group(function () {
 // Rutas públicas de biblioteca
 Route::prefix('biblioteca')->name('biblioteca.')->group(function () {
     Route::get('/', [BibliotecaController::class, 'index'])->name('index');
+    Route::get('/', [BibliotecaController::class, 'adminIndex'])->name('index');
     Route::get('/{slug}', [BibliotecaController::class, 'show'])->name('show');
 });
 
@@ -195,6 +217,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{payment}/receipt', [PaymentController::class, 'downloadReceipt'])->name('receipt');
         Route::get('/{payment}', [PaymentController::class, 'show'])->name('show');
     });
+    
+
 });
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';

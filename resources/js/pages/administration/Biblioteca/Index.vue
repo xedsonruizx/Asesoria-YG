@@ -44,8 +44,25 @@ interface PaginatedData<T> {
   total: number;
 }
 
+interface Carpeta {
+  id: number;
+  nombre: string;
+  slug: string;
+  descripcion?: string;
+  color: string;
+  icono: string;
+  orden: number;
+  activa: boolean;
+  padre_id?: number;
+  nivel: number;
+  ruta_completa: string;
+  subcarpetas?: Carpeta[];
+  bibliotecas?: Biblioteca[];
+}
+
 interface Props {
   biblioteca: PaginatedData<Biblioteca>;
+  carpetas?: Carpeta[];
   stats?: {
     total: number;
     premium: number;
@@ -756,11 +773,12 @@ const getDependencyInfo = (biblioteca: Biblioteca) => {
       :is-open="showShowModal"
       @close="closeModals"
     />
-    
-    <HierarchyModal
-      :biblioteca="props.biblioteca.data"
-      :show="showHierarchyModal"
-      @close="closeModals"
+    <!-- HierarchyModal -->
+    <HierarchyModal 
+      :biblioteca="biblioteca.data" 
+      :carpetas="carpetas || []"
+      :show="showHierarchyModal" 
+      @close="closeModals" 
     />
   </AppLayout>
 </template>

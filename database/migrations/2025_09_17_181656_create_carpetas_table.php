@@ -13,7 +13,24 @@ return new class extends Migration
     {
         Schema::create('carpetas', function (Blueprint $table) {
             $table->id();
+            $table->string('nombre');
+            $table->string('slug')->unique();
+            $table->text('descripcion')->nullable();
+            $table->string('color', 7)->default('#3B82F6');
+            $table->string('icono')->default('folder');
+            $table->integer('orden')->default(0);
+            $table->boolean('activa')->default(true);
+            
+            // Soporte para jerarquía (subcarpetas)
+            $table->foreignId('padre_id')->nullable()->constrained('carpetas')->onDelete('cascade');
+            $table->integer('nivel')->default(0);
+            $table->string('ruta_completa')->nullable();
+            
             $table->timestamps();
+            $table->softDeletes();
+            
+            $table->index('activa');
+            $table->index('nivel');
         });
     }
 

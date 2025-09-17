@@ -18,6 +18,7 @@ class Biblioteca extends Model
         'slug',
         'descripcion',
         'padre_id',
+        'carpeta_id',
         'is_premium',
         'orden'
     ];
@@ -26,6 +27,12 @@ class Biblioteca extends Model
         'is_premium' => 'boolean',
         'orden' => 'integer'
     ];
+
+    // Relación con carpeta
+    public function carpeta()
+    {
+        return $this->belongsTo(Carpeta::class, 'carpeta_id');
+    }
 
     // Relación padre
     public function padre()
@@ -61,6 +68,18 @@ class Biblioteca extends Model
     public function scopeGratuito($query)
     {
         return $query->where('is_premium', false);
+    }
+
+    // Scope por carpeta
+    public function scopePorCarpeta($query, $carpetaId)
+    {
+        return $query->where('carpeta_id', $carpetaId);
+    }
+
+    // Scope ordenados
+    public function scopeOrdenados($query)
+    {
+        return $query->orderBy('orden')->orderBy('titulo');
     }
 
     // Generar slug automáticamente

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
-import { X, BookOpen, Loader2, Lock, Unlock } from 'lucide-vue-next';
+import { X, BookOpen, Loader2, Lock, Unlock, Folder } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import RichTextEditor from '@/components/ui/rich-text-editor/RichTextEditor.vue';
+import axios from 'axios';
 
 // Props
 interface Biblioteca {
@@ -13,6 +14,7 @@ interface Biblioteca {
   slug: string;
   descripcion: string;
   padre_id?: number;
+  carpeta_id?: number;
   is_premium: boolean;
   orden: number;
   created_at: string;
@@ -32,13 +34,13 @@ const emit = defineEmits<{
 
 const processing = ref(false);
 
-
 // Datos del formulario - inicializar con valores por defecto
 const form = ref({
   titulo: '',
   slug: '',
   descripcion: '',
   padre_id: null as number | null,
+  carpeta_id: null as number | null,
   is_premium: false,
   orden: 0
 });
@@ -53,6 +55,7 @@ watch(() => props.biblioteca, (newBiblioteca) => {
       slug: newBiblioteca.slug,
       descripcion: newBiblioteca.descripcion,
       padre_id: newBiblioteca.padre_id || null,
+      carpeta_id: newBiblioteca.carpeta_id || null,
       is_premium: newBiblioteca.is_premium,
       orden: newBiblioteca.orden
     };
@@ -66,6 +69,14 @@ const elementosPadre = ref<Array<{
   nivel: number;
 }>>([]);
 
+// Carpetas disponibles (se cargarán del backend)
+const carpetas = ref<Array<{
+  id: number;
+  nombre: string;
+  nivel: number;
+  ruta_completa: string;
+}>>([]);
+
 // Función para cerrar el modal
 const close = () => {
   emit('close');
@@ -73,7 +84,7 @@ const close = () => {
 
 // Función para generar slug automáticamente
 const generateSlug = () => {
-  if (form.value.titulo && form.value.slug === props.biblioteca.slug) {
+  if (form.value.titulo && props.biblioteca && form.value.slug === props.biblioteca.slug) {
     form.value.slug = form.value.titulo
       .toLowerCase()
       .replace(/[áàäâ]/g, 'a')
@@ -91,6 +102,8 @@ const generateSlug = () => {
 
 // Función para actualizar el elemento
 const updateBiblioteca = () => {
+  if (!props.biblioteca) return;
+  
   processing.value = true;
   errors.value = {};
   
@@ -121,16 +134,29 @@ const updateBiblioteca = () => {
   });
 };
 
-// Cargar elementos padre al montar el componente
-const loadElementosPadre = () => {
-  // En una implementación real, esto vendría del backend
-  // Por ahora usamos datos de ejemplo
-  elementosPadre.value = [];
+// Cargar elementos padre y carpetas al montar el componente
+const loadData = async () => {
+  if (!props.biblioteca) return;
+  
+  try {
+    const response = await axios.get(`/admin/biblioteca/${props.biblioteca.id}/edit`, {
+      headers: {
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    });
+    elementosPadre.value = response.data.elementosPadre || [];
+    carpetas.value = response.data.carpetas || [];
+  } catch (error) {
+    console.error('Error cargando datos:', error);
+  }
 };
 
-// Cargar elementos padre
-onMounted(() => {
-  loadElementosPadre();
+// Cargar datos cuando se muestre el modal y haya una biblioteca
+watch([() => props.show, () => props.biblioteca], ([show, biblioteca]) => {
+  if (show && biblioteca) {
+    loadData();
+  }
 });
 </script>
 
@@ -204,27 +230,27 @@ onMounted(() => {
             <p v-if="errors.slug" class="mt-1 text-sm text-destructive">{{ errors.slug }}</p>
           </div>
 
-          <!-- Elemento Padre -->
+          <!-- Carpeta Padre -->
           <div>
-            <label class="block text-sm font-medium text-foreground mb-2">
-              Elemento Padre
+            <label class="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+              <Folder class="w-4 h-4" />
+              Carpeta Padre
             </label>
             <select
-              v-model="form.padre_id"
+              v-model="form.carpeta_id"
               class="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
-              :class="{ 'border-destructive': errors.padre_id }"
+              :class="{ 'border-destructive': errors.carpeta_id }"
             >
-              <option :value="null">Seleccione</option>
-              <option v-for="elemento in elementosPadre" :key="elemento.id" :value="elemento.id">
-                {{ '—'.repeat(elemento.nivel) }}{{ elemento.nivel > 0 ? ' ' : '' }}{{ elemento.titulo }}
+              <option :value="null">Sin carpeta padre</option>
+              <option v-for="carpeta in carpetas" :key="carpeta.id" :value="carpeta.id">
+                {{ '—'.repeat(carpeta.nivel) }}{{ carpeta.nivel > 0 ? ' ' : '' }}{{ carpeta.nombre }}
               </option>
             </select>
             <p class="mt-1 text-xs text-muted-foreground">
-              No puedes seleccionar este elemento o sus descendientes como padre
+              Selecciona la carpeta donde se organizará este elemento
             </p>
-            <p v-if="errors.padre_id" class="mt-1 text-sm text-destructive">{{ errors.padre_id }}</p>
+            <p v-if="errors.carpeta_id" class="mt-1 text-sm text-destructive">{{ errors.carpeta_id }}</p>
           </div>
-
           <!-- Descripción -->
           <div>
             <label class="block text-sm font-medium text-foreground mb-2">
