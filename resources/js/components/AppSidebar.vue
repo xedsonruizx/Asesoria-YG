@@ -54,16 +54,16 @@ const mainNavItems: NavItem[] = [
         href: '/multas',
         icon: AlertTriangle,
     },
-        {
-        title: 'membresias',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-        {
-        title: 'login',
-        href: login(),
-        icon: LayoutGrid,
-    },
+    //     {
+    //     title: 'membresias',
+    //     href: dashboard(),
+    //     icon: LayoutGrid,
+    // },
+    //     {
+    //     title: 'login',
+    //     href: login(),
+    //     icon: LayoutGrid,
+    // },
 ];
 
 const footerNavItems: NavItem[] = [
@@ -99,7 +99,7 @@ const footerNavItems: NavItem[] = [
         </SidebarContent>
 
         <SidebarFooter>
-            <NavFooter :items="footerNavItems" />
+            <!-- <NavFooter :items="footerNavItems" /> -->
             <NavUser />
         </SidebarFooter>
     </Sidebar>

@@ -22,61 +22,11 @@
         Resultados de su Evaluación
       </h1>
 
-    <Pre>
+    <!-- <Pre>
       {{ triggeredMultas }}
-    </Pre>
+    </Pre> -->
 
-      <!-- Sección de Multas Activadas -->
-      <div v-if="triggeredMultas && triggeredMultas.length > 0" class="mb-12">
-        <div class="bg-red-900/30 border border-red-500/50 rounded-lg p-6">
-          <h2 class="text-red-400 text-2xl font-bold mb-4 flex items-center">
-            <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-            </svg>
-            Aspectos que Requieren Atención Inmediata
-          </h2>
-          <p class="text-red-300 mb-6">
-            Basándose en sus respuestas, se han identificado los siguientes aspectos que requieren atención legal inmediata:
-          </p>
-          
-          <div class="space-y-4">
-            <div 
-              v-for="(multa, index) in triggeredMultas" 
-              :key="`multa-${multa.multa_id}-${index}`"
-              class="bg-red-800/20 border border-red-400/30 rounded-lg p-4"
-            >
-              <div class="flex items-start space-x-3">
-                <div class="flex-shrink-0 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white text-sm font-bold mt-1">
-                  {{ index + 1 }}
-                </div>
-                <div class="flex-1">
-                  <h3 class="text-red-300 font-semibold text-lg mb-2">
-                    {{ multa.multa_name }}
-                  </h3>
-                  <p class="text-red-200 mb-3">
-                    {{ multa.multa_description }}
-                  </p>
-                  <div class="text-sm text-red-400 space-y-1">
-                    <p><strong>Categoría:</strong> {{ multa.category_name }}</p>
-                    <p><strong>Pregunta relacionada:</strong> {{ multa.question_text }}</p>
-                    <p><strong>Su respuesta:</strong> 
-                      <span class="text-red-300">
-                        {{ formatAnswerValue(multa.answer_value) }}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="mt-6 p-4 bg-yellow-900/30 border border-yellow-500/50 rounded-lg">
-            <p class="text-yellow-300 text-sm">
-              <strong>Recomendación:</strong> Se recomienda encarecidamente solicitar una consulta profesional para abordar estos aspectos críticos y evitar posibles consecuencias legales.
-            </p>
-          </div>
-        </div>
-      </div>
+ 
 
       <!-- Círculos de progreso por categoría (dinámico) -->
       <div class="grid gap-12 mb-12" :class="{
@@ -145,6 +95,63 @@
           <div class="text-gray-400 text-sm">Puntaje {{ category.name }}</div>
         </div>
       </div>
+
+
+     <!-- Sección de Multas Activadas -->
+      <div v-if="triggeredMultas && triggeredMultas.length > 0" class="mb-12">
+        <div class="bg-red-900/30 border border-red-500/50 rounded-lg p-6">
+          <h2 class="text-red-400 text-2xl font-bold mb-4 flex items-center">
+            <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+            Aspectos que Requieren Atención Inmediata
+          </h2>
+          <p class="text-red-300 mb-6">
+            Basándose en sus respuestas, se han identificado los siguientes aspectos que requieren atención legal inmediata:
+          </p>
+          
+          <div class="space-y-4">
+            <div 
+              v-for="(multa, index) in triggeredMultas" 
+              :key="`multa-${multa.multa_id}-${index}`"
+              class="bg-red-800/20 border border-red-400/30 rounded-lg p-4"
+            >
+              <div class="flex items-start space-x-3">
+                <div class="flex-shrink-0 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white text-sm font-bold mt-1">
+                  {{ index + 1 }}
+                </div>
+                <div class="flex-1">
+                  <h3 class="text-red-300 font-semibold text-lg mb-2">
+                    {{ multa.multa_name }}
+                  </h3>
+                  <p class="text-red-200 mb-3">
+                    {{ multa.multa_description }}
+                  </p>
+                  <div class="text-sm text-red-400 space-y-1">
+                    <p><strong>Categoría:</strong> {{ multa.category_name }}</p>
+                    <p><strong>Pregunta relacionada:</strong> {{ multa.question_text }}</p>
+                    <p><strong>Su respuesta:</strong> 
+                      <span class="text-red-300">
+                        {{ formatAnswerValue(multa.answer_value) }}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="mt-6 p-4 bg-yellow-900/30 border border-yellow-500/50 rounded-lg">
+            <p class="text-yellow-300 text-sm">
+              <strong>Recomendación:</strong> Se recomienda encarecidamente solicitar una consulta profesional para abordar estos aspectos críticos y evitar posibles consecuencias legales.
+            </p>
+          </div>
+        </div>
+      </div>
+
+
+
+
 
       <!-- Botones de acción -->
       <div class="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
