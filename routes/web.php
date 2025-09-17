@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BibliotecaController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Http\Controllers\PostController;
@@ -135,6 +136,45 @@ Route::middleware(['auth'])->group(function () {
     // Rutas públicas de servicios (dentro de auth para acceso completo)
     Route::get('/services', [ServiceController::class, 'index'])->name('services.index');
     Route::get('/services/{service}', [ServiceController::class, 'show'])->name('services.show');
+    
+    // Rutas de compras
+    Route::prefix('purchases')->name('purchases.')->group(function () {
+        Route::get('/', [PurchaseController::class, 'index'])->name('index');
+        Route::post('/', [PurchaseController::class, 'store'])->name('store');
+        Route::get('/{purchase}', [PurchaseController::class, 'show'])->name('show');
+    });
+    
+    // Rutas de pagos
+    Route::prefix('payments')->name('payments.')->group(function () {
+        Route::get('/', [PaymentController::class, 'index'])->name('index');
+        Route::get('/return', [PaymentController::class, 'return'])->name('return');
+        Route::get('/stats', [PaymentController::class, 'stats'])->name('stats');
+        Route::get('/success/{payment}', [PaymentController::class, 'success'])->name('success');
+        Route::get('/failed/{payment}', [PaymentController::class, 'failed'])->name('failed');
+        Route::post('/{payment}/retry', [PaymentController::class, 'retry'])->name('retry');
+        Route::post('/{payment}/cancel', [PaymentController::class, 'cancel'])->name('cancel');
+        Route::get('/{payment}/receipt', [PaymentController::class, 'downloadReceipt'])->name('receipt');
+        Route::get('/{payment}', [PaymentController::class, 'show'])->name('show');
+    });
+});
+
+// Rutas públicas de biblioteca
+Route::prefix('biblioteca')->name('biblioteca.')->group(function () {
+    Route::get('/', [BibliotecaController::class, 'index'])->name('index');
+    Route::get('/{slug}', [BibliotecaController::class, 'show'])->name('show');
+});
+
+Route::middleware(['auth'])->group(function () {
+    // Rutas de administración de biblioteca
+    Route::prefix('admin/biblioteca')->name('admin.biblioteca.')->middleware('role:admin')->group(function () {
+        Route::get('/', [BibliotecaController::class, 'adminIndex'])->name('index');
+        Route::get('/create', [BibliotecaController::class, 'create'])->name('create');
+        Route::post('/', [BibliotecaController::class, 'store'])->name('store');
+        Route::get('/{biblioteca}/edit', [BibliotecaController::class, 'edit'])->name('edit');
+        Route::put('/{biblioteca}', [BibliotecaController::class, 'update'])->name('update');
+        Route::delete('/{biblioteca}', [BibliotecaController::class, 'destroy'])->name('destroy');
+        Route::post('/{id}/restore', [BibliotecaController::class, 'restore'])->name('restore');
+    });
     
     // Rutas de compras
     Route::prefix('purchases')->name('purchases.')->group(function () {

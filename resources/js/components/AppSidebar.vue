@@ -10,7 +10,7 @@ import questions from '@/routes/questions';
 
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, FileText, UsersRound, ClipboardList, HelpCircle, FolderOpen, Tags, AlertTriangle } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, FileText, UsersRound, ClipboardList, HelpCircle, FolderOpen, Tags, AlertTriangle, Library } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
 const mainNavItems: NavItem[] = [
@@ -35,25 +35,32 @@ const mainNavItems: NavItem[] = [
         icon: UsersRound,
     },
     {
-        title: 'Evaluaciones',
-        href: '/evaluations',
-        icon: ClipboardList,
+        title: 'Biblioteca',
+        href: '/admin/biblioteca',
+        icon: Library,
     },
+
     {
         title: 'Categorías de Evaluación',
         href: '/question-categories',
         icon: Tags,
     },
     {
-        title: 'Preguntas',
-        href: '/admin/questions',
-        icon: HelpCircle,
-    },
-    {
         title: 'Multas',
         href: '/multas',
         icon: AlertTriangle,
     },
+    {
+        title: 'Preguntas',
+        href: '/admin/questions',
+        icon: HelpCircle,
+    },
+        {
+        title: 'Evaluaciones',
+        href: '/evaluations',
+        icon: ClipboardList,
+    },
+
     //     {
     //     title: 'membresias',
     //     href: dashboard(),
