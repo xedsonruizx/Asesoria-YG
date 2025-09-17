@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, nextTick } from 'vue';
 import { ChevronRight, Lock, Unlock, Plus, Minus, Folder, FolderPlus, BookOpen, Trash2, X } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,16 +34,23 @@ const isExpanded = ref(false);
 const showingCreateForm = ref(false);
 const newFolderName = ref('');
 const errors = ref<Record<string, string[]>>({});
+const folderNameInput = ref<HTMLInputElement | null>(null);
 
 // Funciones
 const toggleExpanded = () => {
   isExpanded.value = !isExpanded.value;
 };
 
-const showCreateForm = () => {
+const showCreateForm = async () => {
   showingCreateForm.value = true;
   newFolderName.value = '';
   errors.value = {};
+  
+  // Enfocar el input después de que se renderice
+  await nextTick();
+  if (folderNameInput.value && typeof folderNameInput.value.focus === 'function') {
+    folderNameInput.value.focus();
+  }
 };
 
 const cancelCreate = () => {
@@ -52,18 +59,40 @@ const cancelCreate = () => {
   errors.value = {};
 };
 
-const createFolder = () => {
-  if (!newFolderName.value.trim()) return;
+const createFolder = async () => {
+  // Verificar que el nombre existe y es válido
+  if (!newFolderName.value || typeof newFolderName.value !== 'string' || !newFolderName.value.trim()) {
+    console.error('Nombre de carpeta inválido en HierarchyItem:', newFolderName.value);
+    return;
+  }
   
+  // Mantener expandido después de crear
+  isExpanded.value = true;
+  
+  // Emitir el evento con el nombre limpio
   emit('createFolder', props.item.id, newFolderName.value.trim());
-  cancelCreate();
+  
+  // Limpiar el formulario
+  newFolderName.value = '';
+  errors.value = {};
+  showingCreateForm.value = false;
 };
+
+// Función para expandir automáticamente cuando se crean subcarpetas
+const expandAfterCreate = () => {
+  isExpanded.value = true;
+};
+
+// Exponer función para uso externo
+defineExpose({
+  expandAfterCreate
+});
 
 const deleteItem = () => {
   emit('deleteFolder', props.item);
 };
 
-// Computed
+// Computed functions
 const hasChildren = () => {
   if (props.item.type === 'carpeta') {
     const subcarpetas = props.item.subcarpetas_recursivas || props.item.subcarpetas || props.item.children || [];
@@ -77,7 +106,14 @@ const getChildren = () => {
   if (props.item.type === 'carpeta') {
     const subcarpetas = props.item.subcarpetas_recursivas || props.item.subcarpetas || props.item.children || [];
     const elementos = props.item.bibliotecas || props.item.elementos || [];
-    return [...subcarpetas, ...elementos];
+    
+    // Asegurar que todas las subcarpetas tengan el tipo correcto
+    const processedSubcarpetas = subcarpetas.map((subcarpeta: any) => ({
+      ...subcarpeta,
+      type: 'carpeta'
+    }));
+    
+    return [...processedSubcarpetas, ...elementos];
   }
   return [];
 };
@@ -158,18 +194,18 @@ const getStatusColor = () => {
           v-if="item.type === 'carpeta'"
           variant="ghost"
           size="sm"
-          class="h-6 w-6 p-0"
+          class="h-6 w-6 p-0 hover:bg-primary/10"
           @click="showCreateForm"
           title="Crear subcarpeta"
         >
-          <FolderPlus class="h-3 w-3" />
+          <FolderPlus class="h-3 w-3 text-primary" />
         </Button>
 
         <!-- Botón para eliminar -->
         <Button
           variant="ghost"
           size="sm"
-          class="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+          class="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
           @click="deleteItem"
           title="Eliminar"
         >
@@ -187,6 +223,7 @@ const getStatusColor = () => {
       <div class="space-y-2">
         <div class="flex items-center gap-2">
           <Input
+            ref="folderNameInput"
             v-model="newFolderName"
             placeholder="Nombre de la subcarpeta"
             class="flex-1 h-8"
@@ -198,6 +235,7 @@ const getStatusColor = () => {
             :disabled="!newFolderName.trim()"
             size="sm"
             class="h-8 px-2"
+            title="Crear subcarpeta"
           >
             <Plus class="w-3 h-3" />
           </Button>
@@ -206,11 +244,17 @@ const getStatusColor = () => {
             variant="outline"
             size="sm"
             class="h-8 px-2"
+            title="Cancelar"
           >
             <X class="w-3 h-3" />
           </Button>
         </div>
         <InputError :message="errors.nombre?.[0]" />
+        
+        <!-- Mensaje de ayuda -->
+        <p class="text-xs text-muted-foreground">
+          Presiona Enter para crear o Escape para cancelar
+        </p>
       </div>
     </div>
 
@@ -221,8 +265,8 @@ const getStatusColor = () => {
         :key="`${child.type}-${child.id}`"
         :item="child"
         :level="level + 1"
-        @create-folder="$emit('createFolder', $event)"
-        @delete-folder="$emit('deleteFolder', $event)"
+        @create-folder="(parentId, nombre) => $emit('createFolder', parentId, nombre)"
+        @delete-folder="(item) => $emit('deleteFolder', item)"
       />
     </div>
   </div>

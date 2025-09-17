@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { X, BookOpen, ChevronRight, Lock, Unlock, Plus, Minus, Folder, FolderPlus } from 'lucide-vue-next';
+import { X, BookOpen, Folder, FolderPlus, Plus } from 'lucide-vue-next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,7 @@ import { usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import HierarchyItem from './HierarchyItem.vue';
 
-// Props
+// Interfaces
 interface Biblioteca {
   id: number;
   titulo: string;
@@ -48,6 +48,7 @@ interface Carpeta {
   type: 'carpeta';
 }
 
+// Props
 const props = defineProps<{
   biblioteca: Biblioteca[];
   carpetas?: Carpeta[];
@@ -61,12 +62,12 @@ const emit = defineEmits<{
 }>();
 
 // Estados reactivos
-const showingCreateForm = ref<number | null>(null);
-const newFolderName = ref('');
-const isCreating = ref(false);
+const localCarpetas = ref<Carpeta[]>([]);
+const newFolderName = ref<string>('');
+const isCreating = ref<boolean>(false);
 const errors = ref<Record<string, string[]>>({});
-const localCarpetas = ref<Carpeta[]>(props.carpetas || []);
 const localBiblioteca = ref<Biblioteca[]>(props.biblioteca || []);
+const showCreateFormRoot = ref<boolean>(false);
 
 // Obtener errores de la página
 const page = usePage();
@@ -76,15 +77,32 @@ const pageErrors = computed(() => page.props.errors || {});
 const hierarchyData = computed(() => {
   const data: any[] = [];
   
+  // Función recursiva para procesar carpetas y asegurar que tengan el tipo correcto
+  const processCarpeta = (carpeta: any): any => {
+    const processedCarpeta = {
+      ...carpeta,
+      type: 'carpeta',
+      children: [],
+      elementos: carpeta.bibliotecas || []
+    };
+    
+    // Procesar subcarpetas recursivamente
+    if (carpeta.subcarpetas && carpeta.subcarpetas.length > 0) {
+      processedCarpeta.children = carpeta.subcarpetas.map((subcarpeta: any) => processCarpeta(subcarpeta));
+    }
+    
+    // También procesar subcarpetas_recursivas si existen
+    if (carpeta.subcarpetas_recursivas && carpeta.subcarpetas_recursivas.length > 0) {
+      processedCarpeta.subcarpetas_recursivas = carpeta.subcarpetas_recursivas.map((subcarpeta: any) => processCarpeta(subcarpeta));
+    }
+    
+    return processedCarpeta;
+  };
+  
   // Agregar carpetas si existen
   if (localCarpetas.value && localCarpetas.value.length > 0) {
     localCarpetas.value.forEach(carpeta => {
-      data.push({
-        ...carpeta,
-        type: 'carpeta',
-        children: carpeta.subcarpetas || [],
-        elementos: carpeta.bibliotecas || []
-      });
+      data.push(processCarpeta(carpeta));
     });
   }
   
@@ -103,38 +121,30 @@ const hierarchyData = computed(() => {
   return data;
 });
 
-// Función para limpiar errores
+// Funciones utilitarias
 const clearErrors = () => {
   errors.value = {};
 };
 
-// Función para mostrar formulario de nueva carpeta
-const showCreateForm = (parentId: number | null = null) => {
-  showingCreateForm.value = parentId;
+const showCreateForm = () => {
+  showCreateFormRoot.value = true;
   newFolderName.value = '';
   clearErrors();
 };
 
-// Función para cancelar creación
 const cancelCreate = () => {
-  showingCreateForm.value = null;
+  showCreateFormRoot.value = false;
   newFolderName.value = '';
   clearErrors();
 };
 
-// Función para refrescar datos
-const refreshData = async () => {
-  try {
-    const response = await axios.get('/api/carpetas/arbol');
-    localCarpetas.value = response.data || [];
-  } catch (error) {
-    console.error('Error al refrescar datos:', error);
-  }
-};
-
-// Función para crear carpeta con axios
+// Función principal para crear carpetas
 const createFolder = async (parentId: number | null = null) => {
-  if (!newFolderName.value.trim()) return;
+  // Verificar que newFolderName.value existe y es válido
+  if (!newFolderName.value || typeof newFolderName.value !== 'string' || !newFolderName.value.trim()) {
+    console.error('Nombre de carpeta inválido:', newFolderName.value);
+    return false;
+  }
   
   isCreating.value = true;
   clearErrors();
@@ -157,7 +167,13 @@ const createFolder = async (parentId: number | null = null) => {
     await refreshData();
     
     // Limpiar formulario
-    cancelCreate();
+    if (parentId === null) {
+      showCreateFormRoot.value = false;
+    }
+    newFolderName.value = '';
+    clearErrors();
+    
+    return true;
     
   } catch (error: any) {
     console.error('Error creando carpeta:', error);
@@ -166,12 +182,23 @@ const createFolder = async (parentId: number | null = null) => {
     } else {
       errors.value = { general: ['Ocurrió un error inesperado'] };
     }
+    return false;
   } finally {
     isCreating.value = false;
   }
 };
 
-// Función para eliminar carpeta con axios
+// Función para refrescar datos
+const refreshData = async () => {
+  try {
+    const response = await axios.get('/api/carpetas/arbol');
+    localCarpetas.value = response.data || [];
+  } catch (error) {
+    console.error('Error al refrescar datos:', error);
+  }
+};
+
+// Función para eliminar carpeta
 const deleteFolder = async (carpeta: Carpeta) => {
   if (!confirm(`¿Estás seguro de que deseas eliminar la carpeta "${carpeta.nombre}"? Esto también eliminará todas sus subcarpetas y moverá los elementos de biblioteca a la carpeta padre.`)) {
     return;
@@ -180,7 +207,6 @@ const deleteFolder = async (carpeta: Carpeta) => {
   clearErrors();
   
   try {
-    // Usar ID como corresponde
     await axios.delete(`/carpetas/${carpeta.id}`, {
       headers: {
         'Accept': 'application/json',
@@ -205,22 +231,42 @@ const deleteFolder = async (carpeta: Carpeta) => {
 
 // Función para manejar eventos del componente hijo
 const handleCreateFolder = async (parentId: number | null, nombre: string) => {
-  newFolderName.value = nombre;
-  await createFolder(parentId);
+  // Validar que el nombre sea válido
+  if (!nombre || typeof nombre !== 'string' || !nombre.trim()) {
+    console.error('Nombre de carpeta inválido:', nombre);
+    return;
+  }
+  
+  // Asignar el nombre y crear la carpeta
+  newFolderName.value = nombre.trim();
+  const success = await createFolder(parentId);
+  
+  // Si la creación fue exitosa y hay un padre, expandir el elemento padre
+  if (success && parentId !== null) {
+    expandParentFolder(parentId);
+  }
 };
 
+// Función para manejar eliminación desde componente hijo
 const handleDeleteFolder = async (carpeta: Carpeta) => {
   await deleteFolder(carpeta);
 };
 
-// Cargar datos al montar el componente
+// Función para expandir carpetas padre (placeholder para futura implementación)
+const expandParentFolder = (parentId: number) => {
+  // Esta función se comunicará con HierarchyItem para mantener expandido
+  // el elemento padre después de crear una subcarpeta
+  console.log('Expandiendo carpeta padre:', parentId);
+};
+
+// Lifecycle hooks
 onMounted(() => {
   if (props.show) {
     refreshData();
   }
 });
 
-// Observar cambios en la prop show para recargar datos
+// Watchers
 watch(() => props.show, (newValue) => {
   if (newValue) {
     refreshData();
@@ -262,21 +308,33 @@ watch(() => props.show, (newValue) => {
                   Gestiona la estructura jerárquica de carpetas y elementos de la biblioteca.
                 </p>
               </div>
+              <!-- Botón para mostrar formulario de nueva carpeta -->
               <Button 
-                @click="showCreateForm(null)"
-                variant="outline"
+                v-if="!showCreateFormRoot"
+                @click="showCreateForm"
                 size="sm"
                 class="flex items-center gap-2"
               >
                 <FolderPlus class="w-4 h-4" />
-                Nueva Carpeta Raíz
+                Nueva Carpeta
               </Button>
             </div>
           </div>
 
           <!-- Formulario de nueva carpeta raíz -->
-          <div v-if="showingCreateForm === null" class="bg-muted/20 rounded-lg p-4 border-2 border-dashed border-primary/30">
+          <div v-if="showCreateFormRoot" class="bg-muted/20 rounded-lg p-4 border-2 border-dashed border-primary/30">
             <div class="space-y-3">
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="font-medium text-foreground">Crear Nueva Carpeta Raíz</h4>
+                <Button 
+                  @click="cancelCreate"
+                  variant="ghost"
+                  size="sm"
+                  class="h-6 w-6 p-0"
+                >
+                  <X class="h-3 w-3" />
+                </Button>
+              </div>
               <div class="space-y-2">
                 <div class="flex items-center gap-2">
                   <Input
@@ -298,16 +356,12 @@ watch(() => props.show, (newValue) => {
                     <Plus class="w-3 h-3" />
                     {{ isCreating ? 'Creando...' : 'Crear' }}
                   </Button>
-                  <Button 
-                    @click="cancelCreate"
-                    variant="outline"
-                    size="sm"
-                  >
-                    <X class="w-3 h-3" />
-                  </Button>
                 </div>
                 <InputError :message="errors.nombre?.[0] || pageErrors.nombre?.[0]" />
                 <InputError :message="errors.padre_id?.[0] || pageErrors.padre_id?.[0]" />
+                <p class="text-xs text-muted-foreground">
+                  Presiona Enter para crear o Escape para cancelar
+                </p>
               </div>
             </div>
           </div>
