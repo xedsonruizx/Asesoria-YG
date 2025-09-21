@@ -343,4 +343,74 @@ class Carpeta extends Model
         
         return $total;
     }
+
+    /**
+     * Obtener árbol jerárquico solo con carpetas que contienen bibliotecas
+     */
+    public static function getArbolJerarquicoConBibliotecas()
+    {
+        $carpetas = static::with([
+                'subcarpetasRecursivas.bibliotecas' => function ($query) {
+                    $query->whereNull('deleted_at')->orderBy('orden');
+                },
+                'bibliotecas' => function ($query) {
+                    $query->whereNull('deleted_at')->orderBy('orden');
+                }
+            ])
+            ->raiz()
+            ->activas()
+            ->ordenadas()
+            ->get();
+
+        // Filtrar solo carpetas que tienen bibliotecas (recursivamente)
+        return $carpetas->filter(function ($carpeta) {
+            return $carpeta->tieneBibliotecasRecursivas();
+        })->map(function ($carpeta) {
+            return $carpeta->filtrarSubcarpetasConBibliotecas();
+        })->values()->toArray(); // Agregar values() y toArray()
+    }
+
+    /**
+     * Verificar si la carpeta tiene bibliotecas recursivamente
+     */
+    public function tieneBibliotecasRecursivas()
+    {
+        // Si tiene bibliotecas directas
+        if ($this->bibliotecas->count() > 0) {
+            return true;
+        }
+
+        // Verificar en subcarpetas recursivamente
+        foreach ($this->subcarpetasRecursivas as $subcarpeta) {
+            if ($subcarpeta->bibliotecas->count() > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Filtrar subcarpetas manteniendo solo las que tienen bibliotecas
+     */
+    public function filtrarSubcarpetasConBibliotecas()
+    {
+        // Filtrar subcarpetas recursivamente
+        $subcarpetasFiltradas = $this->subcarpetasRecursivas->filter(function ($subcarpeta) {
+            return $subcarpeta->tieneBibliotecasRecursivas();
+        })->map(function ($subcarpeta) {
+            return $subcarpeta->filtrarSubcarpetasConBibliotecas();
+        })->values();
+
+        // Crear un array con los datos necesarios
+        return [
+            'id' => $this->id,
+            'nombre' => $this->nombre,
+            'activa' => $this->activa,
+            'padre_id' => $this->padre_id,
+            'orden' => $this->orden,
+            'subcarpetas_recursivas' => $subcarpetasFiltradas->toArray(),
+            'bibliotecas' => $this->bibliotecas->toArray()
+        ];
+    }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Biblioteca;
+use App\Models\Carpeta;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -20,10 +21,28 @@ class BibliotecaController extends Controller
             ->orderBy('orden')
             ->get();
 
-        return Inertia::render('Biblioteca/Index', [
+        return Inertia::render('ClientMenu/Libreria', [
             'bibliotecaTree' => $bibliotecaTree
         ]);
     }
+
+
+    public function clientIndex()
+    {
+        // Usar el sistema de carpetas con bibliotecas que ya implementaste
+        $carpetasTree = Carpeta::getArbolJerarquicoConBibliotecas();
+
+        return Inertia::render('ClientMenu/Libreria', [
+            'carpetas' => $carpetasTree ?? [],
+            'auth' => [
+                'user' => Auth::user(),
+                'permissions' => Auth::user() ? Auth::user()->getAllPermissions()->pluck('name') : []
+            ]
+        ]);
+    }
+
+
+
 
     /**
      * Mostrar un elemento específico de la biblioteca

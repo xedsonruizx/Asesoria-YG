@@ -110,6 +110,14 @@ onUnmounted(() => {
                         Publicaciones
                     </Link>
                     
+                    <!-- Nueva opción de Biblioteca -->
+                    <Link 
+                        href="/biblioteca" 
+                        :class="addActiveClasses('text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium dark:text-gray-300 dark:hover:text-white', '/biblioteca')"
+                    >
+                        Biblioteca
+                    </Link>
+                    
                     <!-- Dashboard link - solo visible para usuarios con permisos de manage -->
                     <Link 
                         v-if="canManage"
@@ -139,12 +147,15 @@ onUnmounted(() => {
                         <DropdownMenuTrigger :as-child="true">
                             <Button
                                 variant="ghost"
-                                size="icon"
-                                class="relative size-10 w-auto rounded-full p-1 focus-within:ring-2 focus-within:ring-primary"
+                                class="relative h-8 w-8 rounded-full"
                             >
-                                <Avatar class="size-8 overflow-hidden rounded-full">
-                                    <AvatarImage v-if="auth.user.avatar" :src="auth.user.avatar" :alt="auth.user.name" />
-                                    <AvatarFallback class="rounded-lg bg-neutral-200 font-semibold text-black dark:bg-neutral-700 dark:text-white">
+                                <Avatar class="h-8 w-8">
+                                    <AvatarImage 
+                                        v-if="auth.user?.avatar" 
+                                        :src="auth.user.avatar" 
+                                        :alt="auth.user?.name" 
+                                    />
+                                    <AvatarFallback>
                                         {{ getInitials(auth.user?.name) }}
                                     </AvatarFallback>
                                 </Avatar> 
@@ -170,7 +181,7 @@ onUnmounted(() => {
                             <DropdownMenuItem v-if="canManage" as-child>
                                 <Link href="/admin/dashboard" class="flex items-center w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
                                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2 2z" />
                                     </svg>
                                     Dashboard
                                 </Link>

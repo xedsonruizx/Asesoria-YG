@@ -181,8 +181,7 @@ Route::middleware(['auth'])->group(function () {
 
 // Rutas públicas de biblioteca
 Route::prefix('biblioteca')->name('biblioteca.')->group(function () {
-    Route::get('/', [BibliotecaController::class, 'index'])->name('index');
-    Route::get('/', [BibliotecaController::class, 'adminIndex'])->name('index');
+    Route::get('/', [BibliotecaController::class, 'clientIndex'])->name('index');
     Route::get('/{slug}', [BibliotecaController::class, 'show'])->name('show');
 });
 
