@@ -313,16 +313,17 @@ watch(carpetasData, (newData) => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#FDFDFC] dark:bg-[#0a0a0a]">
+    <TopBar />
+
+  <div class="min-h-screen bg-background max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 dark:bg-[#0a0a0a]  ">
     <Head title="Biblioteca" />
     
     <!-- TopBar -->
-    <TopBar />
     
     <div class="flex">
       <!-- Sidebar -->
       <div 
-        class="bg-[#FDFDFC] dark:bg-[#0a0a0a] shadow-lg h-screen sticky top-0 overflow-y-auto border-r border-gray-300 dark:border-gray-600 transition-all duration-300"
+        class="bg-background dark:bg-[#0a0a0a] h-screen sticky top-0 overflow-y-auto border-r border-gray-300 dark:border-gray-600 transition-all duration-300"
         :class="sidebarOpen ? 'w-80' : 'w-16'"
       >
         <!-- Toggle Button -->

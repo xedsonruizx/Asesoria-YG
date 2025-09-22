@@ -3,17 +3,23 @@ import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
-import { dashboard, login } from '@/routes';
+import { dashboard, login, inicio } from '@/routes';
 import posts from '@/routes/posts';
 import users from '@/routes/users';
 import questions from '@/routes/questions';
 
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, FileText, UsersRound, ClipboardList, HelpCircle, FolderOpen, Tags, AlertTriangle, Library } from 'lucide-vue-next';
+import { BookOpen, Folder,HomeIcon, LayoutGrid, FileText, UsersRound, ClipboardList, HelpCircle, FolderOpen, Tags, AlertTriangle, Library } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
 const mainNavItems: NavItem[] = [
+    {
+        title: 'Inicio',
+        href: inicio(),
+        icon: HomeIcon,
+    },
+
     {
         title: 'Dashboard',
         href: dashboard(),

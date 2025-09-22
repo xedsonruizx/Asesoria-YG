@@ -17,6 +17,7 @@ use App\Http\Controllers\MultaController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\ServiceController;
+use App\Http\Controllers\AuthSettingsController; // Nuevo controlador
 use App\Http\Middleware\ThrottleAnswers;
 
 // ============================================
@@ -31,15 +32,8 @@ Route::get('publicacion/{post}', [PostController::class, 'clientShow'])->name('p
 // RUTAS PARA USUARIOS AUTENTICADOS
 // ============================================
 Route::middleware(['auth'])->group(function () {
-    // Ruta de evaluación que requiere autenticación
-    Route::get('evaluacion', [EvaluationController::class, 'index'])->name('evaluacion');
-    
-    // Rutas de API para evaluaciones
-    Route::post('/evaluation/answer', [EvaluationController::class, 'saveAnswer'])->middleware(['auth']);
-    Route::post('/evaluation/submit', [EvaluationController::class, 'submit'])->name('evaluation.submit');
-    Route::post('/evaluation/restart', [EvaluationController::class, 'restart'])->name('evaluation.restart');
-    Route::get('/evaluation/{evaluation}/report', [EvaluationController::class, 'report'])->name('evaluation.report');
-    
+
+
     // Rutas que requieren permiso 'manage'
     Route::middleware(['permission:manage'])->group(function () {
         Route::get('dashboard', function () {return Inertia::render('administration/Dashboard');})-> name('dashboard');
@@ -134,88 +128,116 @@ Route::middleware(['auth'])->group(function () {
         Route::get('api/carpetas/arbol', [CarpetaController::class, 'arbol'])->name('api.carpetas.arbol');
 
 
-
-
-
+        // Rutas de administración de biblioteca
+        Route::prefix('admin/biblioteca')->name('admin.biblioteca.')->middleware('role:admin')->group(function () {
+            Route::get('/', [BibliotecaController::class, 'adminIndex'])->name('index');
+            Route::get('/create', [BibliotecaController::class, 'create'])->name('create');
+            Route::post('/', [BibliotecaController::class, 'store'])->name('store');
+            Route::get('/{biblioteca}/edit', [BibliotecaController::class, 'edit'])->name('edit');
+            Route::put('/{biblioteca}', [BibliotecaController::class, 'update'])->name('update');
+            Route::delete('/{biblioteca}', [BibliotecaController::class, 'destroy'])->name('destroy');
+            Route::post('/{id}/restore', [BibliotecaController::class, 'restore'])->name('restore');
+        });
     });
     
+    // FIN RUTAS ADMIN
+
+
+
+
+
+
+
     // Rutas que requieren permiso 'guest' (solo ver)
     Route::middleware(['permission:guest'])->group(function () {
         // Rutas de solo lectura si las necesitas
         // Resource para multas
-        Route::resource('multas', MultaController::class);
+
+        // Ruta de evaluación que requiere autenticación
+        Route::get('evaluacion', [EvaluationController::class, 'index'])->name('evaluacion');
+    
+   
+        
+        // Rutas de configuraciones de usuario (ClientMenu/AuthSettings)
+        Route::prefix('auth-settings')->name('auth-settings.')->group(function () {
+            Route::get('/', function () {
+                return Inertia::render('ClientMenu/AuthSettings/AuthSettings');
+            })->name('index');
+            
+            Route::get('/profile', [AuthSettingsController::class, 'profile'])->name('profile');
+            Route::patch('/profile', [AuthSettingsController::class, 'updateProfile'])->name('profile.update');
+            
+            Route::get('/password', [AuthSettingsController::class, 'password'])->name('password');
+            Route::patch('/password', [AuthSettingsController::class, 'updatePassword'])->name('password.update');
+            
+            Route::get('/appearance', [AuthSettingsController::class, 'appearance'])->name('appearance');
+        });
+
+        // Rutas de API para evaluaciones
+        Route::post('/evaluation/answer', [EvaluationController::class, 'saveAnswer'])->middleware(['auth']);
+        Route::post('/evaluation/submit', [EvaluationController::class, 'submit'])->name('evaluation.submit');
+        Route::post('/evaluation/restart', [EvaluationController::class, 'restart'])->name('evaluation.restart');
+        Route::get('/evaluation/{evaluation}/report', [EvaluationController::class, 'report'])->name('evaluation.report');
+
+
+
+            Route::resource('multas', MultaController::class);
         Route::patch('/multas/{multa}/toggle-status', [MultaController::class, 'toggleStatus'])->name('multas.toggle-status');
         Route::patch('/multas/{id}/restore', [MultaController::class, 'restore'])->name('multas.restore');
         Route::delete('/multas/{id}/force-delete', [MultaController::class, 'forceDelete'])->name('multas.force-delete');
         Route::get('api/multas', [MultaController::class, 'apiIndex'])->name('api.multas.index');
         Route::delete('/multas/{multa}/remove-file', [MultaController::class, 'removeFile'])->name('multas.remove-file');
+
+
+        // Rutas públicas de servicios (dentro de auth para acceso completo)
+        Route::get('/services', [ServiceController::class, 'index'])->name('services.index');
+        Route::get('/services/{service}', [ServiceController::class, 'show'])->name('services.show');
+
+        // Rutas de compras
+        Route::prefix('purchases')->name('purchases.')->group(function () {
+            Route::get('/', [PurchaseController::class, 'index'])->name('index');
+            Route::post('/', [PurchaseController::class, 'store'])->name('store');
+            Route::get('/{purchase}', [PurchaseController::class, 'show'])->name('show');
+        });
+        
+        // Rutas de pagos
+        Route::prefix('biblioteca')->name('biblioteca.')->group(function () {
+            Route::get('/', [BibliotecaController::class, 'clientIndex'])->name('index');
+            Route::get('/{slug}', [BibliotecaController::class, 'show'])->name('show');
+        });
+
+        // Rutas de compras
+        Route::prefix('purchases')->name('purchases.')->group(function () {
+            Route::get('/', [PurchaseController::class, 'index'])->name('index');
+            Route::post('/', [PurchaseController::class, 'store'])->name('store');
+            Route::get('/{purchase}', [PurchaseController::class, 'show'])->name('show');
+        });
+        
+        // Rutas de pagos
+        Route::prefix('payments')->name('payments.')->group(function () {
+            Route::get('/', [PaymentController::class, 'index'])->name('index');
+            Route::get('/return', [PaymentController::class, 'return'])->name('return');
+            Route::get('/stats', [PaymentController::class, 'stats'])->name('stats');
+            Route::get('/success/{payment}', [PaymentController::class, 'success'])->name('success');
+            Route::get('/failed/{payment}', [PaymentController::class, 'failed'])->name('failed');
+            Route::post('/{payment}/retry', [PaymentController::class, 'retry'])->name('retry');
+            Route::post('/{payment}/cancel', [PaymentController::class, 'cancel'])->name('cancel');
+            Route::get('/{payment}/receipt', [PaymentController::class, 'downloadReceipt'])->name('receipt');
+            Route::get('/{payment}', [PaymentController::class, 'show'])->name('show');
+        });
+
+
+
     });
 });
 
-// Rutas de servicios y pagos (requieren autenticación)
-Route::middleware(['auth'])->group(function () {
-    // Rutas públicas de servicios (dentro de auth para acceso completo)
-    Route::get('/services', [ServiceController::class, 'index'])->name('services.index');
-    Route::get('/services/{service}', [ServiceController::class, 'show'])->name('services.show');
-    
-    // Rutas de compras
-    Route::prefix('purchases')->name('purchases.')->group(function () {
-        Route::get('/', [PurchaseController::class, 'index'])->name('index');
-        Route::post('/', [PurchaseController::class, 'store'])->name('store');
-        Route::get('/{purchase}', [PurchaseController::class, 'show'])->name('show');
-    });
-    
-    // Rutas de pagos
-    Route::prefix('payments')->name('payments.')->group(function () {
-        Route::get('/', [PaymentController::class, 'index'])->name('index');
-        Route::get('/return', [PaymentController::class, 'return'])->name('return');
-        Route::get('/stats', [PaymentController::class, 'stats'])->name('stats');
-        Route::get('/success/{payment}', [PaymentController::class, 'success'])->name('success');
-        Route::get('/failed/{payment}', [PaymentController::class, 'failed'])->name('failed');
-        Route::post('/{payment}/retry', [PaymentController::class, 'retry'])->name('retry');
-        Route::post('/{payment}/cancel', [PaymentController::class, 'cancel'])->name('cancel');
-        Route::get('/{payment}/receipt', [PaymentController::class, 'downloadReceipt'])->name('receipt');
-        Route::get('/{payment}', [PaymentController::class, 'show'])->name('show');
-    });
-});
 
 // Rutas públicas de biblioteca
-Route::prefix('biblioteca')->name('biblioteca.')->group(function () {
-    Route::get('/', [BibliotecaController::class, 'clientIndex'])->name('index');
-    Route::get('/{slug}', [BibliotecaController::class, 'show'])->name('show');
-});
 
 Route::middleware(['auth'])->group(function () {
-    // Rutas de administración de biblioteca
-    Route::prefix('admin/biblioteca')->name('admin.biblioteca.')->middleware('role:admin')->group(function () {
-        Route::get('/', [BibliotecaController::class, 'adminIndex'])->name('index');
-        Route::get('/create', [BibliotecaController::class, 'create'])->name('create');
-        Route::post('/', [BibliotecaController::class, 'store'])->name('store');
-        Route::get('/{biblioteca}/edit', [BibliotecaController::class, 'edit'])->name('edit');
-        Route::put('/{biblioteca}', [BibliotecaController::class, 'update'])->name('update');
-        Route::delete('/{biblioteca}', [BibliotecaController::class, 'destroy'])->name('destroy');
-        Route::post('/{id}/restore', [BibliotecaController::class, 'restore'])->name('restore');
-    });
+
     
-    // Rutas de compras
-    Route::prefix('purchases')->name('purchases.')->group(function () {
-        Route::get('/', [PurchaseController::class, 'index'])->name('index');
-        Route::post('/', [PurchaseController::class, 'store'])->name('store');
-        Route::get('/{purchase}', [PurchaseController::class, 'show'])->name('show');
-    });
-    
-    // Rutas de pagos
-    Route::prefix('payments')->name('payments.')->group(function () {
-        Route::get('/', [PaymentController::class, 'index'])->name('index');
-        Route::get('/return', [PaymentController::class, 'return'])->name('return');
-        Route::get('/stats', [PaymentController::class, 'stats'])->name('stats');
-        Route::get('/success/{payment}', [PaymentController::class, 'success'])->name('success');
-        Route::get('/failed/{payment}', [PaymentController::class, 'failed'])->name('failed');
-        Route::post('/{payment}/retry', [PaymentController::class, 'retry'])->name('retry');
-        Route::post('/{payment}/cancel', [PaymentController::class, 'cancel'])->name('cancel');
-        Route::get('/{payment}/receipt', [PaymentController::class, 'downloadReceipt'])->name('receipt');
-        Route::get('/{payment}', [PaymentController::class, 'show'])->name('show');
-    });
+
     
 
 });
